@@ -1,0 +1,149 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ccm-postgres
+    environment:
+      POSTGRES_USER: ccm
+      POSTGRES_PASSWORD: ccm_password
+      POSTGRES_DB: ccm_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ccm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ccm -d ccm_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgbouncer:
+    image: edoburu/pgbouncer
+    container_name: ccm-pgbouncer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5432:5432"
+    environment:
+      - DATABASE_URL=postgresql://ccm:ccm_password@postgres:5432/ccm_db
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=20
+      - RESERVE_POOL_SIZE=0
+      - RESERVE_POOL_TIMEOUT=5
+      - MAX_DB_CONNECTIONS=20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ccm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ccm_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: ccm-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ccm_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav
+    container_name: ccm-clamav
+    depends_on:
+      - minio
+    environment:
+      - CLAMD_STATS_ENABLE=true
+      - CLAMD_MAX_FILE_SIZE=50M
+      - CLAMD_MAX_SCAN_SIZE=50M
+      - CLAMD_MAX_RECURSION=16
+      - CLAMD_MAX_FILES=10000
+      - CLAMD_MAX_EMBEDDEDPE=10000
+      - CLAMD_MAX_HTMLNOENTITY=10000
+      - CLAMD_MAX_HTMLTAGS=10000
+      - CLAMD_MAX_HTMLATTRS=10000
+      - CLAMD_MAX_SCRIPT=10000
+      - CLAMD_MAX_ZOOMLEVEL=10000
+      - CLAMD_MAX_ENTITYBYTES=10000
+      - CLAMD_MAX_ENTITIES=10000
+      - CLAMD_MAX_MIME=10000
+      - CLAMD_MAX_ICONST=10000
+    volumes:
+      - ccm_clamav_data:/var/lib/clamav
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: ccm-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app:cached
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus
+    container_name: ccm-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: ccm-grafana
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+
+volumes:
+  ccm_pgdata:
+  ccm_redis_data:
+  ccm_minio_data:
+  ccm_clamav_data:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,112 @@
+{
+  "title": "CCM - Correspondence Contract Management",
+  "uid": "ccm-dashboard",
+  "version": 1,
+  "tags": ["ccm"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "HTTP Requests Rate",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(ccm_http_requests_total[1m])",
+          "legendFormat": "{{method}} {{path}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "title": "HTTP Request Duration (p95)",
+      "type": "heatmap",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(ccm_http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{path}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "title": "Jobs Queued vs Completed",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(ccm_jobs_queued_total[5m])",
+          "legendFormat": "queued {{job_type}}"
+        },
+        {
+          "expr": "rate(ccm_jobs_completed_total[5m])",
+          "legendFormat": "completed {{job_type}}"
+        },
+        {
+          "expr": "rate(ccm_jobs_failed_total[5m])",
+          "legendFormat": "failed {{job_type}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "title": "Draft Generation Duration",
+      "type": "heatmap",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(ccm_draft_generation_duration_seconds_bucket[5m])",
+          "legendFormat": "draft gen"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    },
+    {
+      "title": "Webhooks Dispatched",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(ccm_webhooks_dispatched_total[5m])",
+          "legendFormat": "{{event}} success={{success}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+    },
+    {
+      "title": "Active Letters by Status",
+      "type": "piechart",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "ccm_active_letters_by_status",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+    },
+    {
+      "title": "DB Pool Connections",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "ccm_db_pool_checked_out"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 24}
+    },
+    {
+      "title": "Emails Sent",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(ccm_emails_sent_total[5m])",
+          "legendFormat": "{{template}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 24}
+    }
+  ]
+}
