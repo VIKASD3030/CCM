@@ -116,7 +116,7 @@ async def generate_draft(
     """
     Generate an AI draft response for a letter using RAG.
     1. Fetch the letter
-    2. Search knowledge base for relevant context
+    2. Search knowledge base for relevant context (scoped to project)
     3. Build prompt with context
     4. Call AI to generate draft
     5. Store and return
@@ -126,7 +126,7 @@ async def generate_draft(
         raise ValueError(f"Letter {letter_id} not found")
 
     relevant_chunks = await search_similar_chunks(
-        db, letter.raw_text, top_k=5
+        db, letter.raw_text, top_k=5, project_id=str(letter.project_id) if letter.project_id else None
     )
 
     context_parts = []

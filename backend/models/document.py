@@ -11,6 +11,8 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB, ARRAY
 from sqlalchemy.types import Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from backend.models.project import Project
+
 from backend.database import Base
 
 
@@ -39,6 +41,10 @@ class KnowledgeDocument(Base):
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # Project scoping
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
     # For RLS and audit trail
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
@@ -59,6 +65,7 @@ class KnowledgeDocument(Base):
             "category": self.category,
             "chunk_count": self.chunk_count,
             "status": self.status,
+            "project_id": str(self.project_id) if self.project_id else None,
             "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

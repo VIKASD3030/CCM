@@ -1,5 +1,7 @@
 const App = {
     currentPage: 'dashboard',
+    currentProjectId: null,
+    projects: [],
 
     init() {
         this.setupRouting();
@@ -32,22 +34,14 @@ const App = {
 
         const titles = {
             dashboard: 'Dashboard',
-            knowledge: 'Knowledge Base',
-            letters: 'Inbox',
             drafting: 'AI Drafting',
-            review: 'Review & Approve',
-            settings: 'Settings',
         };
         document.getElementById('page-title').textContent = titles[page] || 'CCM';
         document.getElementById('topbar-actions').innerHTML = '';
 
         switch (page) {
             case 'dashboard': this.renderDashboard(); break;
-            case 'knowledge': KnowledgePage.render(); break;
-            case 'letters':   LettersPage.render(); break;
             case 'drafting':  DraftingPage.render(); break;
-            case 'review':    ReviewPage.render(); break;
-            case 'settings':  SettingsPage.render(); break;
             default:          this.renderDashboard();
         }
 
@@ -70,25 +64,6 @@ const App = {
                 }
             }
         });
-    },
-
-    openDrawer(title, bodyHtml, footerHtml = '') {
-        document.getElementById('slide-over-title').textContent = title;
-        document.getElementById('slide-over-body').innerHTML = bodyHtml;
-        const footer = document.getElementById('slide-over-footer');
-        if (footerHtml) {
-            footer.innerHTML = footerHtml;
-            footer.style.display = 'flex';
-        } else {
-            footer.style.display = 'none';
-        }
-        document.getElementById('slide-over').classList.add('open');
-        document.getElementById('slide-over-backdrop').classList.add('open');
-    },
-
-    closeDrawer() {
-        document.getElementById('slide-over').classList.remove('open');
-        document.getElementById('slide-over-backdrop').classList.remove('open');
     },
 
     closeModal() {
@@ -140,30 +115,83 @@ const App = {
         setTimeout(() => this.checkHealth(), 30000);
     },
 
-    /* ── Dashboard ── */
+    async loadProjects() {
+        try {
+            const data = await API.projects.list();
+            this.projects = data.projects || [];
+        } catch {
+            this.projects = [];
+        }
+        return this.projects;
+    },
 
+    getProjectName(id) {
+        const p = this.projects.find(p => p.id === id);
+        return p ? p.name : 'Legacy';
+    },
+
+    /* ── Project Switcher ── */
+    projectSelector() {
+        const options = this.projects.map(p =>
+            `<option value="${p.id}" ${this.currentProjectId === p.id ? 'selected' : ''}>${this.escapeHtml(p.name)}</option>`
+        ).join('');
+        return `
+            <div class="project-selector">
+                <i class="ti ti-folder"></i>
+                <select id="project-select" class="filter-select" onchange="App.setProject(this.value)">
+                    <option value="">All Projects</option>
+                    ${options}
+                </select>
+            </div>
+        `;
+    },
+
+    setProject(projectId) {
+        this.currentProjectId = projectId || null;
+        this.navigate(this.currentPage);
+    },
+
+    /* ── Dashboard ── */
     async renderDashboard() {
         const content = document.getElementById('page-content');
+        await this.loadProjects();
 
         content.innerHTML = `
+            <div class="dash-toolbar">
+                ${this.projectSelector()}
+            </div>
             <div class="stat-row" id="dash-metrics">
                 ${this._skeletonMetrics()}
             </div>
 
             <div class="pipeline-card" id="dash-pipeline-card">
+                <div class="card-header" style="margin-bottom:0;border-bottom:none;">
+                    <span style="font-size:13px;font-weight:500;color:var(--text-primary);">Pipeline</span>
+                </div>
                 <div class="pipeline-strip" id="dash-pipeline-bar">
                     <div class="skeleton" style="flex:1;height:52px;border-radius:8px;"></div>
                 </div>
             </div>
 
-            <div class="two-col">
+            <div class="dash-grid">
                 <div class="card">
                     <div class="card-header">
                         <span style="font-size:13px;font-weight:500;color:var(--text-primary);">Recent letters</span>
-                        <a href="#letters" class="btn btn-ghost btn-sm">View all</a>
+                        <button class="btn btn-ghost btn-sm" onclick="window.location.hash='#drafting'">
+                            <i class="ti ti-writing"></i> Draft
+                        </button>
                     </div>
                     <div id="dash-recent-letters">
                         <div class="loading-overlay"><div class="spinner"></div><span>Loading…</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span style="font-size:13px;font-weight:500;color:var(--text-primary);">Sync Status</span>
+                    </div>
+                    <div id="dash-sync-status">
+                        <div class="loading-overlay"><div class="spinner"></div></div>
                     </div>
                 </div>
 
@@ -177,18 +205,13 @@ const App = {
                 </div>
             </div>
 
-            <div class="card">
-                <div class="quick-actions">
-                    <button class="btn btn-primary" onclick="window.location.hash='#knowledge'">
-                        <i class="ti ti-upload"></i> Upload to Knowledge Base
-                    </button>
-                    <button class="btn btn-secondary" onclick="window.location.hash='#letters'">
-                        <i class="ti ti-mail"></i> Upload Client Letter
-                    </button>
-                    <button class="btn btn-ghost" onclick="window.location.hash='#review'">
-                        <i class="ti ti-checkup-list"></i> Review Pending Drafts
-                    </button>
-                </div>
+            <div class="card quick-actions" style="margin-top:12px;">
+                <button class="btn btn-primary" onclick="App.showUploadModal()">
+                    <i class="ti ti-upload"></i> Upload Letter
+                </button>
+                <button class="btn btn-secondary" onclick="window.location.hash='#drafting'">
+                    <i class="ti ti-writing"></i> AI Drafting
+                </button>
             </div>
         `;
 
@@ -196,7 +219,7 @@ const App = {
     },
 
     _skeletonMetrics() {
-        return Array(4).map(() => `
+        return Array(4).fill().map(() => `
             <div class="stat-card">
                 <div class="skeleton" style="width:28px;height:28px;border-radius:8px;"></div>
                 <div style="flex:1;">
@@ -209,16 +232,18 @@ const App = {
 
     async loadDashboardStats() {
         try {
-            const [stats, kbStats] = await Promise.all([
+            const [statsRes, kbStats] = await Promise.all([
                 API.review.dashboardStats(),
                 API.knowledge.stats(),
             ]);
 
+            const stats = statsRes;
+
             const metrics = [
-                { icon: 'ti-inbox', color: '#534AB7', bg: '#EEEDFE', label: 'Total Letters', value: stats.total_letters || 0, id: 'dash-total-letters', trend: null },
-                { icon: 'ti-writing', color: '#3B82F6', bg: '#E6F1FB', label: 'Drafts Generated', value: stats.total_drafts || 0, id: 'dash-drafts', trend: null },
-                { icon: 'ti-clock-hour-4', color: '#633806', bg: '#FAEEDA', label: 'Pending Review', value: stats.pending_review || 0, id: 'dash-pending', trend: stats.pending_review > 0 ? 'Needs attention' : null },
-                { icon: 'ti-book-2', color: '#27500A', bg: '#EAF3DE', label: 'KB Documents', value: kbStats.total_documents || 0, id: 'dash-kb-docs', trend: null },
+                { icon: 'ti-inbox', color: '#534AB7', bg: '#EEEDFE', label: 'Total Letters', value: stats.total_letters || 0, id: 'dash-total-letters' },
+                { icon: 'ti-writing', color: '#3B82F6', bg: '#E6F1FB', label: 'Drafts Generated', value: stats.total_drafts || 0, id: 'dash-drafts' },
+                { icon: 'ti-clock-hour-4', color: '#633806', bg: '#FAEEDA', label: 'Pending Review', value: stats.pending_review || 0, id: 'dash-pending' },
+                { icon: 'ti-book-2', color: '#27500A', bg: '#EAF3DE', label: 'KB Documents', value: kbStats.total_documents || 0, id: 'dash-kb-docs' },
             ];
 
             document.getElementById('dash-metrics').innerHTML = metrics.map(m => `
@@ -229,12 +254,11 @@ const App = {
                     <div class="stat-body">
                         <div class="stat-label">${m.label}</div>
                         <div class="stat-value" id="${m.id}">${m.value}</div>
-                        ${m.trend ? `<div class="stat-trend muted">${m.trend}</div>` : ''}
                     </div>
                 </div>
             `).join('');
 
-            // Pipeline strip
+            // Pipeline
             const stages = [
                 { label: 'Received', count: stats.total_letters || 0 },
                 { label: 'Classified', count: (stats.letters_by_status && stats.letters_by_status.classified) || 0 },
@@ -242,7 +266,6 @@ const App = {
                 { label: 'Approved', count: (stats.drafts_by_status && stats.drafts_by_status.approved) || 0 },
                 { label: 'Sent', count: (stats.letters_by_status && stats.letters_by_status.sent) || 0 },
             ];
-
             document.getElementById('dash-pipeline-bar').innerHTML = stages.map(s => `
                 <div class="pipeline-segment">
                     <div class="pipeline-seg-count">${s.count}</div>
@@ -252,7 +275,7 @@ const App = {
 
             // Recent letters
             const lettersRes = await API.letters.list();
-            const letters    = (lettersRes.letters || lettersRes || []).slice(0, 5);
+            const letters    = (lettersRes.letters || []).slice(0, 5);
             const lettersEl  = document.getElementById('dash-recent-letters');
 
             if (!letters.length) {
@@ -266,7 +289,7 @@ const App = {
                         <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border);">
                             <div style="flex:1;min-width:0;">
                                 <div style="font-size:13px;font-weight:500;">${this.escapeHtml(l.sender || 'Unknown')}</div>
-                                <div class="truncate text-muted" style="max-width:200px;font-size:12px;">${this.escapeHtml(l.subject || l.filename || '—')}</div>
+                                <div class="truncate text-muted" style="max-width:200px;font-size:12px;">${this.escapeHtml(l.filename || '—')}</div>
                                 <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">${date}</div>
                             </div>
                             <span class="status-pill ${sk}">${l.status.replace('_',' ')}</span>
@@ -275,18 +298,42 @@ const App = {
                 }).join('');
             }
 
+            // Sync status
+            const syncEl = document.getElementById('dash-sync-status');
+            if (this.projects.length) {
+                const syncData = await Promise.all(
+                    this.projects.map(p =>
+                        API.projects.stats(p.id).catch(() => null)
+                    )
+                );
+                syncEl.innerHTML = this.projects.map((p, i) => {
+                    const s = syncData[i];
+                    const lastSync = s?.last_sync;
+                    const statusClass = lastSync?.status === 'success' ? 'connected' : (lastSync?.status === 'failed' ? 'error' : '');
+                    return `
+                        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);">
+                            <div class="status-dot ${statusClass}" style="width:8px;height:8px;"></div>
+                            <div style="flex:1;font-size:12px;font-weight:500;">${this.escapeHtml(p.name)}</div>
+                            <div style="font-size:11px;color:var(--text-tertiary);">
+                                ${lastSync?.last_synced_at ? new Date(lastSync.last_synced_at).toLocaleString() : 'Never synced'}
+                            </div>
+                            <div style="font-size:11px;color:var(--text-tertiary);">
+                                ${lastSync?.files_synced !== undefined ? `${lastSync.files_synced} files` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                syncEl.innerHTML = `<div class="empty-state" style="padding:16px;"><div class="empty-state-body">No projects configured</div></div>`;
+            }
+
             // Activity
             const activities = stats.recent_activity || [];
             const actEl      = document.getElementById('dash-activity');
             if (!activities.length) {
-                actEl.innerHTML = `<div class="empty-state" style="padding:24px;"><div class="empty-state-icon"><i class="ti ti-activity" style="font-size:24px;"></i></div><div class="empty-state-body">No activity yet</div></div>`;
+                actEl.innerHTML = `<div class="empty-state" style="padding:16px;"><div class="empty-state-icon"><i class="ti ti-activity"></i></div><div class="empty-state-body">No activity yet</div></div>`;
             } else {
-                const iconMap = {
-                    uploaded: { icon:'ti-upload', color:'#3B82F6', bg:'#E6F1FB' },
-                    draft:    { icon:'ti-writing', color:'#534AB7', bg:'#EEEDFE' },
-                    approved: { icon:'ti-check', color:'#27500A', bg:'#EAF3DE' },
-                    received: { icon:'ti-mail', color:'#633806', bg:'#FAEEDA' },
-                };
+                const iconMap = { uploaded: { icon:'ti-upload', color:'#3B82F6', bg:'#E6F1FB' }, draft: { icon:'ti-writing', color:'#534AB7', bg:'#EEEDFE' }, approved: { icon:'ti-check', color:'#27500A', bg:'#EAF3DE' }, received: { icon:'ti-mail', color:'#633806', bg:'#FAEEDA' } };
                 actEl.innerHTML = `<div class="timeline">${activities.slice(0,5).map(a => {
                     let style = iconMap.received;
                     for (const [k,v] of Object.entries(iconMap)) { if (a.action.includes(k)) { style = v; break; } }
@@ -305,18 +352,64 @@ const App = {
                 }).join('')}</div>`;
             }
 
-            // Badges
-            ReviewPage.updateBadgeCount(stats.pending_review || 0);
-            const unclassified = (stats.letters_by_status && stats.letters_by_status.received) || 0;
-            const inboxBadge = document.getElementById('inbox-badge');
-            if (inboxBadge) {
-                inboxBadge.textContent = unclassified;
-                inboxBadge.style.display = unclassified > 0 ? 'inline-block' : 'none';
-            }
-
         } catch (error) {
             console.error('Dashboard error:', error);
-            document.getElementById('dash-metrics').innerHTML = `<div style="grid-column:span 4;"><div class="empty-state"><div class="empty-state-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-state-title">Failed to load dashboard</div><div class="empty-state-body">Check that the backend server is running.</div><button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="App.renderDashboard()">Retry</button></div></div>`;
+            document.getElementById('dash-metrics').innerHTML = `<div style="grid-column:span 4;"><div class="empty-state"><div class="empty-state-icon"><i class="ti ti-alert-circle"></i></div><div class="empty-state-title">Failed to load dashboard</div><button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="App.renderDashboard()">Retry</button></div></div>`;
+        }
+    },
+
+    showUploadModal() {
+        App.closeModal();
+        const modal = document.getElementById('modal-content');
+        modal.innerHTML = `
+            <div class="modal-header">
+                <span class="modal-title">Upload Client Letter</span>
+                <button class="btn-ghost btn-sm" onclick="App.closeModal()"><i class="ti ti-x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Project</label>
+                    <select id="upload-project" class="form-input">
+                        <option value="">Select project (optional)</option>
+                        ${App.projects.map(p => `<option value="${p.id}">${App.escapeHtml(p.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">File</label>
+                    <input type="file" id="upload-file-input" class="form-input" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png">
+                </div>
+                <div id="upload-status"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="App.submitUpload()"><i class="ti ti-upload"></i> Upload</button>
+            </div>
+        `;
+        document.getElementById('modal-overlay').style.display = 'flex';
+    },
+
+    async submitUpload() {
+        const fileInput = document.getElementById('upload-file-input');
+        const projectSelect = document.getElementById('upload-project');
+        const statusEl = document.getElementById('upload-status');
+
+        if (!fileInput.files.length) {
+            statusEl.innerHTML = '<div class="upload-error"><i class="ti ti-alert-circle"></i> Please select a file</div>';
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const projectId = projectSelect.value;
+
+        statusEl.innerHTML = '<div class="upload-success"><i class="ti ti-spinner"></i> Uploading…</div>';
+
+        try {
+            await API.letters.upload(file, projectId);
+            statusEl.innerHTML = '<div class="upload-success"><i class="ti ti-check"></i> Uploaded! Classifying in background.</div>';
+            App.showToast('Letter uploaded and classification enqueued', 'success');
+            setTimeout(() => App.closeModal(), 1500);
+        } catch (e) {
+            statusEl.innerHTML = `<div class="upload-error"><i class="ti ti-alert-circle"></i> ${this.escapeHtml(e.message)}</div>`;
         }
     },
 
@@ -329,7 +422,6 @@ const App = {
 };
 
 /* ── Auth Guard ── */
-
 function requireAuth() {
     const token = localStorage.getItem('ccm_access_token');
     if (!token) {
@@ -345,7 +437,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { App.closeModal(); App.closeDrawer(); }
+    if (e.key === 'Escape') { App.closeModal(); }
 });
-
-document.getElementById('slide-over-backdrop')?.addEventListener('click', () => App.closeDrawer());

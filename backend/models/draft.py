@@ -10,6 +10,8 @@ from sqlalchemy import String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from backend.models.project import Project
+
 from backend.database import Base
 
 
@@ -47,6 +49,11 @@ class DraftResponse(Base):
         onupdate=lambda: datetime.now(timezone.utc)
     )
 
+    # Project scoping
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Relationship back to letter
     letter: Mapped["InboundLetter"] = relationship(
         "InboundLetter", back_populates="drafts"
@@ -56,6 +63,7 @@ class DraftResponse(Base):
         return {
             "id": str(self.id),
             "letter_id": str(self.letter_id),
+            "project_id": str(self.project_id) if self.project_id else None,
             "draft_text": self.draft_text,
             "version": self.version,
             "status": self.status,

@@ -104,12 +104,12 @@ async def classify_letter_task(ctx: Dict[str, Any], letter_id: str) -> Dict[str,
             raise
 
 
-async def generate_draft_task(ctx: Dict[str, Any], letter_id: str, tone: str = "") -> Dict[str, Any]:
+async def generate_draft_task(ctx: Dict[str, Any], letter_id: str, tone: str = "", session_id: str = "") -> Dict[str, Any]:
     """
     Generate a draft response for a letter using RAG + AI.
     """
     job_id = ctx.get("job_id", "")
-    logger.info("generate_draft_task.start", letter_id=letter_id, job_id=job_id, tone=tone)
+    logger.info("generate_draft_task.start", letter_id=letter_id, job_id=job_id, tone=tone, session_id=session_id)
 
     async with async_session_factory() as session:
         try:
@@ -117,6 +117,21 @@ async def generate_draft_task(ctx: Dict[str, Any], letter_id: str, tone: str = "
 
             from backend.services.drafting import generate_draft
             draft = await generate_draft(session, letter_id, additional_instructions=tone)
+
+            # If session_id is provided, automatically add the AI response to the drafting session thread
+            if session_id:
+                try:
+                    from backend.services.drafting_sessions import add_message
+                    await add_message(
+                        db=session,
+                        session_id=session_id,
+                        role="assistant",
+                        content=draft.draft_text,
+                        draft_response_id=str(draft.id),
+                    )
+                    logger.info("generate_draft_task.saved_message", session_id=session_id, draft_id=str(draft.id))
+                except Exception as e:
+                    logger.error("generate_draft_task.save_message_failed", session_id=session_id, error=str(e))
 
             await _update_job_status(
                 session, job_id, "completed",
@@ -248,6 +263,29 @@ async def send_email_task(ctx: Dict[str, Any], template_name: str, recipients: l
         return {"status": "failed", "error": str(e)}
 
 
+async def sharepoint_sync_task(ctx: Dict[str, Any], project_id: str = None) -> Dict[str, Any]:
+    """
+    Sync SharePoint documents for a project (or all projects).
+    Runs in the background so it doesn't block the API.
+    """
+    job_id = ctx.get("job_id", "")
+    logger.info("sharepoint_sync_task.start", project_id=project_id, job_id=job_id)
+
+    try:
+        from backend.services.sharepoint_sync import sync_project_sharepoint, sync_all_projects
+
+        if project_id:
+            result = await sync_project_sharepoint(project_id)
+        else:
+            result = await sync_all_projects()
+
+        logger.info("sharepoint_sync_task.success", project_id=project_id, result=result, job_id=job_id)
+        return {"status": "completed", "result": result}
+    except Exception as e:
+        logger.error("sharepoint_sync_task.failed", project_id=project_id, error=str(e), job_id=job_id)
+        return {"status": "failed", "error": str(e)}
+
+
 async def deliver_webhook_task(ctx: Dict[str, Any], webhook_id: str, event: str, payload: dict) -> Dict[str, Any]:
     """
     Deliver a webhook event to a configured webhook URL.
@@ -284,6 +322,7 @@ class WorkerSettings:
         index_kb_document_task,
         send_email_task,
         deliver_webhook_task,
+        sharepoint_sync_task,
     ]
     on_startup = startup
     on_shutdown = shutdown

@@ -10,6 +10,8 @@ from sqlalchemy import String, Text, Float, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from backend.models.project import Project
+
 from backend.database import Base
 
 
@@ -42,6 +44,11 @@ class InboundLetter(Base):
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # Project scoping
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+
     # For RLS and audit trail
     created_by: Mapped[uuid.UUID | None] = mapped_column(PG_UUID, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
@@ -50,7 +57,7 @@ class InboundLetter(Base):
         onupdate=lambda: datetime.now(timezone.utc)
     )
 
-    # Relationship to drafts
+    # Relationships
     drafts: Mapped[list["DraftResponse"]] = relationship(
         "DraftResponse", back_populates="letter", cascade="all, delete-orphan"
     )
@@ -66,6 +73,7 @@ class InboundLetter(Base):
             "confidence_score": self.confidence_score,
             "key_entities": self.key_entities,
             "status": self.status,
+            "project_id": str(self.project_id) if self.project_id else None,
             "received_at": self.received_at.isoformat() if self.received_at else None,
             "created_by": str(self.created_by) if self.created_by else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

@@ -33,9 +33,15 @@ class StorageSettings(BaseModel):
 
 
 class AISettings(BaseModel):
-    openai_api_key: str = Field(..., description="OpenAI API key")
+    openai_api_key: str = Field(..., description="OpenAI API key (fallback)")
     model: str = Field('gpt-4o', description="AI model name")
     max_tokens: int = Field(4096, description="Maximum tokens for AI model")
+
+
+class KnowerSettings(BaseModel):
+    api_key: str = Field(..., description="Knower API key")
+    api_base: str = Field('https://api.knower.ai/v1', description="Knower API base URL")
+    model: str = Field('gpt-5.5', description="Knower model name")
 
 
 class AuthSettings(BaseModel):
@@ -61,6 +67,9 @@ class Settings(BaseSettings):
 
     # AI
     ai: AISettings
+
+    # Knower API
+    knower: KnowerSettings
 
     # Auth
     auth: AuthSettings
@@ -88,6 +97,10 @@ class Settings(BaseSettings):
 
     # PgBouncer
     use_pgbouncer: bool = Field(True, description="Use PgBouncer")
+
+    @property
+    def knower_api_key(self) -> str:
+        return self.knower.api_key
 
     @property
     def openai_api_key(self) -> str:

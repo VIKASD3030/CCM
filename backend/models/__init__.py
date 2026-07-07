@@ -14,6 +14,11 @@ from backend.models.webhook import Webhook, WebhookDelivery
 from backend.models.email_notification import EmailNotificationSetting
 from backend.models.revoked_token import RevokedToken
 from backend.models.password_reset import PasswordResetToken
+from backend.models.project import Project
+from backend.models.sharepoint_sync import SharePointSyncLog
+from backend.models.drafting_session import DraftingSession
+from backend.models.drafting_message import DraftingMessage
+from backend.models.prompt_template import PromptTemplate
 
 __all__ = [
     "KnowledgeDocument",
@@ -29,4 +34,9 @@ __all__ = [
     "EmailNotificationSetting",
     "RevokedToken",
     "PasswordResetToken",
+    "Project",
+    "SharePointSyncLog",
+    "DraftingSession",
+    "DraftingMessage",
+    "PromptTemplate",
 ]

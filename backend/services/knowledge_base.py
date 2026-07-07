@@ -250,11 +250,13 @@ async def search_similar_chunks(
     query_text: str,
     top_k: int = 5,
     category: str = None,
+    project_id: str = None,
     user_id: uuid.UUID = None,
     user_role: str = None,
 ) -> list[dict]:
     """
     Semantic search using in-Python cosine similarity over stored embeddings.
+    Scoped to project_id if provided — no cross-project retrieval by default.
     """
     query_embeddings = await generate_embeddings([query_text])
     if not query_embeddings or query_embeddings[0] is None:
@@ -265,6 +267,9 @@ async def search_similar_chunks(
     stmt = select(DocumentChunk).join(
         KnowledgeDocument, DocumentChunk.document_id == KnowledgeDocument.id
     ).where(KnowledgeDocument.status == "indexed")
+
+    if project_id:
+        stmt = stmt.where(KnowledgeDocument.project_id == project_id)
 
     if user_role not in ["admin", "reviewer"] and user_id is not None:
         stmt = stmt.where(KnowledgeDocument.uploaded_by == user_id)
@@ -304,10 +309,15 @@ async def get_all_documents(
     user_role: str = None,
     skip: int = 0,
     limit: int = 50,
+    project_id: str = None,
 ) -> tuple[list[dict], int]:
     """List all knowledge base documents with pagination and row-level security."""
     count_stmt = select(func.count()).select_from(KnowledgeDocument)
     base_stmt = select(KnowledgeDocument)
+
+    if project_id:
+        count_stmt = count_stmt.where(KnowledgeDocument.project_id == project_id)
+        base_stmt = base_stmt.where(KnowledgeDocument.project_id == project_id)
 
     if user_role not in ["admin", "reviewer"] and user_id is not None:
         count_stmt = count_stmt.where(KnowledgeDocument.uploaded_by == user_id)

@@ -46,8 +46,32 @@ Extract the following information and return ONLY a valid JSON object (no markdo
 Be precise and accurate. If you're uncertain about the category, choose the closest match and reflect that in the confidence_score."""
 
 
-async def classify_letter(letter_text: str) -> dict:
-    """Use AI to classify a client letter and extract metadata."""
+PROJECT_PREDICTION_PROMPT = """You are a project router. Based on the following client letter, predict which project this letter likely belongs to.
+
+Available projects:
+{projects_list}
+
+CLIENT LETTER:
+---
+{letter_text}
+---
+
+Return ONLY a JSON object:
+{{
+    "predicted_project_id": "<project_id or null if unsure>",
+    "confidence": <float 0.0-1.0>,
+    "reason": "<brief reason for the prediction>"
+}}"""
+
+
+async def classify_letter(
+    letter_text: str,
+    projects: list[dict] = None,
+) -> dict:
+    """Use AI to classify a client letter and extract metadata.
+    Optionally predicts the project based on sender domain, content, and contract references.
+    Returns classification dict with optional 'predicted_project' key.
+    """
     try:
         response_text = await gemini_client.call_gemini_async(
             prompt=CLASSIFICATION_PROMPT.format(letter_text=letter_text),
@@ -74,6 +98,31 @@ async def classify_letter(letter_text: str) -> dict:
         if classification.get("urgency") not in valid_urgency:
             classification["urgency"] = "medium"
 
+        # Project prediction
+        if projects:
+            try:
+                projects_list_str = "\n".join(
+                    f"- {p['id']}: {p['name']}" for p in projects
+                )
+                pred_text = await gemini_client.call_gemini_async(
+                    prompt=PROJECT_PREDICTION_PROMPT.format(
+                        projects_list=projects_list_str,
+                        letter_text=letter_text,
+                    ),
+                    model=classification_model,
+                    temperature=0.1,
+                    max_output_tokens=200,
+                    response_format={"type": "json_object"},
+                )
+                if pred_text.startswith("```"):
+                    lines = pred_text.split("\n")
+                    pred_text = "\n".join(lines[1:-1])
+                prediction = json.loads(pred_text)
+                if prediction.get("predicted_project_id"):
+                    classification["predicted_project"] = prediction
+            except Exception as pred_err:
+                logger.warning(f"Project prediction failed: {pred_err}")
+
         return classification
 
     except json.JSONDecodeError as e:
@@ -96,16 +145,31 @@ async def intake_letter(
     content: bytes,
     file_type: str,
     user_id: uuid.UUID,
+    project_id: str = None,
 ) -> InboundLetter:
     """
     Full intake pipeline: extract text -> classify -> store.
-    Dispatches webhook events after each stage.
+    Optionally scoped to a project_id. Dispatches webhook events after each stage.
     """
+    # Load active projects for prediction
+    from backend.models.project import Project
+    from sqlalchemy import select
+    projects_result = await db.execute(
+        select(Project).where(Project.status == "active")
+    )
+    active_projects = projects_result.scalars().all()
+    projects_list = [p.to_dict() for p in active_projects] if active_projects else None
+
     # Extract text
     raw_text = extract_text_from_bytes(content, file_type, filename)
 
-    # Classify
-    classification = await classify_letter(raw_text)
+    # Classify with project prediction
+    classification = await classify_letter(raw_text, projects=projects_list)
+
+    # Use explicit project_id, or predicted project, or legacy
+    resolved_project_id = project_id
+    if not resolved_project_id and classification.get("predicted_project"):
+        resolved_project_id = classification["predicted_project"].get("predicted_project_id")
 
     # Create letter record
     letter = InboundLetter(
@@ -117,6 +181,7 @@ async def intake_letter(
         confidence_score=classification.get("confidence_score"),
         key_entities=classification.get("key_entities"),
         status="classified",
+        project_id=resolved_project_id,
         created_by=user_id,
     )
     db.add(letter)
@@ -159,16 +224,21 @@ async def get_all_letters(
     db: AsyncSession,
     status: str = None,
     category: str = None,
+    project_id: str = None,
     user_id: uuid.UUID = None,
     user_role: str = None,
     skip: int = 0,
     limit: int = 50,
 ) -> tuple[list[dict], int]:
     """List all letters with pagination, optionally filtered by status or category.
-    Returns (letters_list, total_count).
+    Can be scoped to project_id. Returns (letters_list, total_count).
     """
     base_stmt = select(InboundLetter)
     count_stmt = select(func.count()).select_from(InboundLetter)
+
+    if project_id:
+        base_stmt = base_stmt.where(InboundLetter.project_id == project_id)
+        count_stmt = count_stmt.where(InboundLetter.project_id == project_id)
 
     if user_role not in ["admin", "reviewer"] and user_id is not None:
         base_stmt = base_stmt.where(InboundLetter.created_by == user_id)

@@ -19,10 +19,11 @@ router = APIRouter(prefix="/api/letters", tags=["Letters"])
 @router.post("/upload")
 async def upload_letter(
     file: UploadFile = File(...),
+    project_id: str = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload and classify a new client letter."""
+    """Upload and classify a new client letter, optionally scoped to a project."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -30,7 +31,7 @@ async def upload_letter(
     content = await file.read()
 
     try:
-        letter = await letter_service.intake_letter(db, file.filename, content, ext, current_user.id)
+        letter = await letter_service.intake_letter(db, file.filename, content, ext, current_user.id, project_id=project_id)
 
         # Enqueue classification as background job
         arq_redis = await get_arq_redis()
@@ -65,7 +66,7 @@ async def list_letters(
     """
     limit = min(limit, 200)
     letters, total = await letter_service.get_all_letters(
-        db, status, category, current_user.id, current_user.role, skip=skip, limit=limit
+        db, status, category, user_id=current_user.id, user_role=current_user.role, skip=skip, limit=limit
     )
     return {"letters": letters, "total": total, "skip": skip, "limit": limit}
 

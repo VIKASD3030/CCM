@@ -36,6 +36,8 @@ from backend.api.webhooks import router as webhooks_router
 from backend.api.notifications import router as notifications_router
 from backend.api.files import router as files_router
 from backend.api.health import router as health_router
+from backend.api.projects import router as projects_router
+from backend.api.drafting_sessions import router as drafting_sessions_router
 
 # Ensure all models are imported so Base.metadata knows about them
 import backend.models  # noqa: F401
@@ -171,6 +173,8 @@ app.include_router(webhooks_router)
 app.include_router(notifications_router)
 app.include_router(files_router)
 app.include_router(health_router)
+app.include_router(projects_router)
+app.include_router(drafting_sessions_router)
 
 # Serve frontend static files
 app.mount("/css", StaticFiles(directory=str(FRONTEND_DIR / "css")), name="css")

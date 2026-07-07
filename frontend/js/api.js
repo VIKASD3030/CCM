@@ -96,10 +96,37 @@ const API = {
         },
     },
 
+    // ─── Projects ─────────────────────────────────────
+    projects: {
+        list() {
+            return API.request('/api/projects');
+        },
+        get(id) {
+            return API.request(`/api/projects/${id}`);
+        },
+        create(name, sharepointSiteId = null) {
+            return API.postForm('/api/projects', { name, sharepoint_site_id: sharepointSiteId });
+        },
+        update(id, data) {
+            return API.putForm(`/api/projects/${id}`, data);
+        },
+        delete(id) {
+            return API.request(`/api/projects/${id}`, { method: 'DELETE' });
+        },
+        syncLogs(id) {
+            return API.request(`/api/projects/${id}/sync-logs`);
+        },
+        stats(id) {
+            return API.request(`/api/projects/${id}/stats`);
+        },
+    },
+
     // ─── Letters ──────────────────────────────────────
     letters: {
-        upload(file) {
-            return API.upload('/api/letters/upload', file);
+        upload(file, projectId = null) {
+            const extra = {};
+            if (projectId) extra.project_id = projectId;
+            return API.upload('/api/letters/upload', file, extra);
         },
         list(status = null, category = null) {
             const params = new URLSearchParams();
@@ -118,8 +145,8 @@ const API = {
 
     // ─── Drafts ───────────────────────────────────────
     drafts: {
-        generate(letterId, instructions = '') {
-            return API.postForm(`/api/drafts/generate/${letterId}`, { instructions });
+        generate(letterId, instructions = '', sessionId = '') {
+            return API.postForm(`/api/drafts/generate/${letterId}`, { instructions, session_id: sessionId });
         },
         get(id) {
             return API.request(`/api/drafts/${id}`);
@@ -239,8 +266,54 @@ const API = {
         },
     },
 
+    // ─── Jobs ─────────────────────────────────────────
+    jobs: {
+        get(jobId) {
+            return API.request(`/api/jobs/${jobId}`);
+        },
+    },
+
     // ─── Health ───────────────────────────────────────
     health() {
         return API.request('/health');
+    },
+
+    // ─── Drafting Sessions ────────────────────────────
+    draftingSessions: {
+        templates() {
+            return API.request('/api/drafting-sessions/templates');
+        },
+        list() {
+            return API.request('/api/drafting-sessions');
+        },
+        search(q) {
+            return API.request(`/api/drafting-sessions/search?q=${encodeURIComponent(q)}`);
+        },
+        get(sessionId) {
+            return API.request(`/api/drafting-sessions/${sessionId}`);
+        },
+        create(letterId, projectId, title) {
+            return API.postForm('/api/drafting-sessions', {
+                letter_id: letterId || '',
+                project_id: projectId || '',
+                title: title || '',
+            });
+        },
+        togglePin(sessionId) {
+            return API.request(`/api/drafting-sessions/${sessionId}/pin`, { method: 'PATCH' });
+        },
+        rename(sessionId, title) {
+            return API.postForm(`/api/drafting-sessions/${sessionId}/title`, { title });
+        },
+        delete(sessionId) {
+            return API.request(`/api/drafting-sessions/${sessionId}`, { method: 'DELETE' });
+        },
+        addMessage(sessionId, role, content, draftResponseId) {
+            return API.postForm(`/api/drafting-sessions/${sessionId}/messages`, {
+                role,
+                content,
+                draft_response_id: draftResponseId || '',
+            });
+        },
     },
 };

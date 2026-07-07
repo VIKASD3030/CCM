@@ -24,6 +24,7 @@ async def create_draft(
     letter_id: uuid.UUID = Form(...),
     tone: str = Form(""),
     instructions: str = Form(""),
+    session_id: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -31,14 +32,18 @@ async def create_draft(
     Rate limited: 10/minute per user.
     """
     arq_redis = await get_arq_redis()
+    payload = {
+        "letter_id": str(letter_id),
+        "tone": tone or instructions,
+    }
+    if session_id:
+        payload["session_id"] = session_id
+
     job = await enqueue_job(
         db=db,
         arq_redis=arq_redis,
         job_type="generate_draft_task",
-        payload={
-            "letter_id": str(letter_id),
-            "tone": tone or instructions,
-        },
+        payload=payload,
         created_by=current_user.id,
     )
     return {"job_id": str(job.id), "status": "queued"}
@@ -51,6 +56,7 @@ async def generate_draft(
     letter_id: uuid.UUID,
     tone: str = Form(""),
     instructions: str = Form(""),
+    session_id: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -58,14 +64,18 @@ async def generate_draft(
     Rate limited: 10/minute per user.
     """
     arq_redis = await get_arq_redis()
+    payload = {
+        "letter_id": str(letter_id),
+        "tone": tone or instructions,
+    }
+    if session_id:
+        payload["session_id"] = session_id
+
     job = await enqueue_job(
         db=db,
         arq_redis=arq_redis,
         job_type="generate_draft_task",
-        payload={
-            "letter_id": str(letter_id),
-            "tone": tone or instructions,
-        },
+        payload=payload,
         created_by=current_user.id,
     )
     return {"job_id": str(job.id), "status": "queued"}
