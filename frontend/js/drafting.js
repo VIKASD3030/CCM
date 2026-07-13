@@ -152,7 +152,7 @@ const DraftingPage = {
                             </button>
                         </div>
                         <div class="dc-footer">
-                            <span class="text-xs text-tertiary" id="dc-model-label">Knower API · GPT-5.5</span>
+                            <!-- <span class="text-xs text-tertiary" id="dc-model-label">Knower API · GPT-5.5</span> -->
                             <span class="text-xs text-tertiary" id="dc-letter-label">No letter selected</span>
                         </div>
                     </div>

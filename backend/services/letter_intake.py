@@ -4,7 +4,7 @@ Handles uploading client letters and classifying them using AI.
 """
 import uuid
 import json
-import logging
+import structlog
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,12 +14,12 @@ from backend.models.letter import InboundLetter
 from backend.models.audit import AuditEntry
 from backend.services.knowledge_base import extract_text_from_bytes
 from backend.services.webhook_service import dispatch_event
-from backend.services import gemini as gemini_client
+from backend.services import openai_client
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 settings = get_settings()
 
-classification_model = gemini_client.get_model()
+classification_model = openai_client.get_model()
 
 CLASSIFICATION_PROMPT = """You are an expert legal/contract correspondence analyst. Analyze the following client letter and extract structured information.
 
@@ -73,7 +73,7 @@ async def classify_letter(
     Returns classification dict with optional 'predicted_project' key.
     """
     try:
-        response_text = await gemini_client.call_gemini_async(
+        response_text = await openai_client.call_openai_async(
             prompt=CLASSIFICATION_PROMPT.format(letter_text=letter_text),
             model=classification_model,
             temperature=0.1,
@@ -104,7 +104,7 @@ async def classify_letter(
                 projects_list_str = "\n".join(
                     f"- {p['id']}: {p['name']}" for p in projects
                 )
-                pred_text = await gemini_client.call_gemini_async(
+                pred_text = await openai_client.call_openai_async(
                     prompt=PROJECT_PREDICTION_PROMPT.format(
                         projects_list=projects_list_str,
                         letter_text=letter_text,
@@ -121,12 +121,12 @@ async def classify_letter(
                 if prediction.get("predicted_project_id"):
                     classification["predicted_project"] = prediction
             except Exception as pred_err:
-                logger.warning(f"Project prediction failed: {pred_err}")
+                logger.warning("letter.project_prediction_failed", error=str(pred_err))
 
         return classification
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse classification JSON: {e}")
+        logger.error("letter.classification_json_parse_failed", error=str(e))
         return {
             "category": "general_inquiry",
             "intent": "Classification failed — manual review required",
@@ -135,7 +135,7 @@ async def classify_letter(
             "key_entities": {},
         }
     except Exception as e:
-        logger.error(f"Classification failed: {e}")
+        logger.error("letter.classification_failed", error=str(e))
         raise
 
 
@@ -161,7 +161,7 @@ async def intake_letter(
     projects_list = [p.to_dict() for p in active_projects] if active_projects else None
 
     # Extract text
-    raw_text = extract_text_from_bytes(content, file_type, filename)
+    raw_text = await extract_text_from_bytes(content, file_type, filename)
 
     # Classify with project prediction
     classification = await classify_letter(raw_text, projects=projects_list)
@@ -204,8 +204,11 @@ async def intake_letter(
     await db.flush()
 
     logger.info(
-        f"Letter '{filename}' classified as {classification.get('category')} "
-        f"(confidence: {classification.get('confidence_score')}) by user {user_id}"
+        "letter.classified",
+        filename=filename,
+        category=classification.get("category"),
+        confidence=classification.get("confidence_score"),
+        user_id=str(user_id),
     )
 
     # Dispatch webhook (fire-and-forget)

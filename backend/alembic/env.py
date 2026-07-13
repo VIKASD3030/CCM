@@ -20,7 +20,12 @@ if config.config_file_name is not None:
 # Model metadata
 from backend.database import Base
 from backend.models import *  # noqa: F401, F403
+from backend.config import get_settings
 target_metadata = Base.metadata
+
+# Always use the app's actual DB config rather than the static URL in
+# alembic.ini, so migrations never drift from whatever .env configures.
+config.set_main_option("sqlalchemy.url", str(get_settings().database.url))
 
 
 def run_migrations_offline():

@@ -2,6 +2,7 @@ const SettingsPage = {
     currentPanel: 'webhooks',
     webhooks: [],
     users: [],
+    prompts: [],
 
     async render() {
         const content = document.getElementById('page-content');
@@ -10,6 +11,7 @@ const SettingsPage = {
     <aside class="settings-sidebar">
         <div class="settings-section-title">Settings</div>
         <div class="settings-nav-item" onclick="SettingsPage.showPanel('api-keys')"><i class="ti ti-key"></i> API keys</div>
+        <div class="settings-nav-item" onclick="SettingsPage.showPanel('prompts')"><i class="ti ti-sparkles"></i> Prompts</div>
         <div class="settings-nav-item active" onclick="SettingsPage.showPanel('webhooks')"><i class="ti ti-webhook"></i> Webhooks</div>
         <div class="settings-nav-item" onclick="SettingsPage.showPanel('notifications')"><i class="ti ti-bell"></i> Notifications</div>
         <div class="settings-nav-item" onclick="SettingsPage.showPanel('users')"><i class="ti ti-users"></i> Users</div>
@@ -44,6 +46,19 @@ const SettingsPage = {
                     <hr class="settings-divider">
                     <button class="btn btn-primary btn-sm" style="margin-top:4px;"><i class="ti ti-plus"></i> Add key</button>
                 </div>
+            </div>
+        </div>
+
+        <div id="panel-prompts" class="settings-panel">
+            <div class="settings-section-header">
+                <h2>Draft Prompts</h2>
+                <p>Manage predefined prompt templates shown in the AI Drafting panel.</p>
+            </div>
+            <div class="settings-card">
+                <div class="settings-card-title"><i class="ti ti-sparkles"></i> Prompt Templates</div>
+                <div id="prompts-list"><div class="loading-overlay" style="padding:24px;"><div class="spinner"></div></div></div>
+                <hr class="settings-divider">
+                <button class="btn btn-primary btn-sm" onclick="SettingsPage.showPromptModal()"><i class="ti ti-plus"></i> Add prompt</button>
             </div>
         </div>
 
@@ -202,6 +217,7 @@ const SettingsPage = {
 
         this.loadWebhooks();
         this.loadUsers();
+        this.loadPrompts();
         this.loadSystemInfo();
     },
 
@@ -483,5 +499,137 @@ const SettingsPage = {
         const d = document.createElement('div');
         d.textContent = str;
         return d.innerHTML;
+    },
+
+    // ─── Prompts Management ───────────────────────────────────────────
+
+    async loadPrompts() {
+        const list = document.getElementById('prompts-list');
+        if (!list) return;
+        try {
+            const data = await API.prompts.list(true);
+            this.prompts = data.templates || [];
+            this.renderPromptsList();
+        } catch (error) {
+            list.innerHTML = this._errorState('Failed to load prompts', error.message);
+        }
+    },
+
+    renderPromptsList() {
+        const list = document.getElementById('prompts-list');
+        if (!list) return;
+        if (!this.prompts.length) {
+            list.innerHTML = '<div class="empty-state" style="padding:24px;"><div class="empty-state-icon"><i class="ti ti-sparkles-off"></i></div><div class="empty-state-body">No prompts configured yet.</div></div>';
+            return;
+        }
+        list.innerHTML = this.prompts.map(p => {
+            const statusTag = p.is_active
+                ? '<span class="settings-tag settings-tag-success">Active</span>'
+                : '<span class="settings-tag settings-tag-warning">Inactive</span>';
+            return `
+                <div class="settings-prompt-row" style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;">
+                    <div class="settings-prompt-icon" style="font-size:20px;color:var(--text-secondary);"><i class="ti ${this.escapeHtml(p.icon)}"></i></div>
+                    <div class="settings-prompt-info" style="flex:1;min-width:0;">
+                        <div style="font-weight:500;color:var(--text-primary);">${this.escapeHtml(p.label)}</div>
+                        <div style="font-size:12px;color:var(--text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${this.escapeHtml(p.prompt_text)}</div>
+                    </div>
+                    ${statusTag}
+                    <button class="btn btn-ghost btn-sm" onclick="SettingsPage.editPrompt('${p.id}')"><i class="ti ti-pencil"></i></button>
+                    <button class="btn btn-destructive btn-sm" onclick="SettingsPage.deletePrompt('${p.id}')"><i class="ti ti-trash"></i></button>
+                </div>
+            `;
+        }).join('');
+    },
+
+    showPromptModal(promptId = null) {
+        const prompt = promptId ? this.prompts.find(p => p.id === promptId) : null;
+        const title = prompt ? 'Edit Prompt' : 'Add Prompt';
+        const modal = document.getElementById('modal-content');
+        modal.innerHTML = `
+            <div class="modal-header">
+                <span class="modal-title">${title}</span>
+                <button class="btn-ghost btn-sm" onclick="App.closeModal()" style="padding:4px 8px;">
+                    <i class="ti ti-x" style="font-size:16px;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+                <div class="form-group">
+                    <label class="form-label">Label</label>
+                    <input type="text" id="prompt-label" class="form-input" placeholder="e.g., Acknowledge Receipt" value="${prompt ? this.escapeHtml(prompt.label) : ''}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Prompt Text</label>
+                    <textarea id="prompt-text" class="form-input" placeholder="Enter the prompt text..." style="min-height:100px;resize:vertical;">${prompt ? this.escapeHtml(prompt.prompt_text) : ''}</textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="form-group">
+                        <label class="form-label">Icon</label>
+                        <input type="text" id="prompt-icon" class="form-input" placeholder="e.g., ti-sparkles" value="${prompt ? this.escapeHtml(prompt.icon) : 'ti-sparkles'}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Order</label>
+                        <input type="number" id="prompt-order" class="form-input" placeholder="0" value="${prompt ? prompt.display_order : 0}">
+                    </div>
+                </div>
+                ${prompt ? `
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="prompt-active" ${prompt.is_active ? 'checked' : ''} style="cursor:pointer;">
+                        <span>Active</span>
+                    </label>
+                </div>
+                ` : ''}
+                <div id="prompt-create-status" style="font-size:13px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost btn-sm" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-primary btn-sm" onclick="SettingsPage.savePrompt('${promptId || ''}')">${prompt ? 'Update' : 'Create'} Prompt</button>
+            </div>`;
+        document.getElementById('modal-overlay').style.display = 'flex';
+    },
+
+    editPrompt(promptId) {
+        this.showPromptModal(promptId);
+    },
+
+    async savePrompt(promptId) {
+        const label = document.getElementById('prompt-label').value.trim();
+        const promptText = document.getElementById('prompt-text').value.trim();
+        const icon = document.getElementById('prompt-icon').value.trim();
+        const displayOrder = parseInt(document.getElementById('prompt-order').value) || 0;
+        const isActive = document.getElementById('prompt-active')?.checked ?? true;
+
+        if (!label || !promptText) {
+            document.getElementById('prompt-create-status').innerHTML = '<span style="color:var(--color-red);">Label and prompt text are required.</span>';
+            return;
+        }
+
+        const status = document.getElementById('prompt-create-status');
+        status.innerHTML = '<div class="spinner" style="width:14px;height:14px;display:inline-block;margin-right:6px;"></div> ' + (promptId ? 'Updating...' : 'Creating...');
+
+        try {
+            if (promptId) {
+                await API.prompts.update(promptId, label, promptText, icon, displayOrder, isActive);
+            } else {
+                await API.prompts.create(label, promptText, icon, displayOrder);
+            }
+            App.closeModal();
+            App.showToast(promptId ? 'Prompt updated!' : 'Prompt created!', 'success');
+            this.loadPrompts();
+        } catch (error) {
+            status.innerHTML = `<span style="color:var(--color-red);">${this.escapeHtml(error.message)}</span>`;
+        }
+    },
+
+    async deletePrompt(promptId) {
+        const p = this.prompts.find(x => x.id === promptId);
+        if (!confirm(`Delete prompt "${p ? p.label : promptId}"?`)) return;
+        try {
+            await API.prompts.delete(promptId);
+            App.showToast('Prompt deleted.', 'info');
+            this.loadPrompts();
+        } catch (e) {
+            App.showToast(`Delete failed: ${e.message}`, 'error');
+        }
     },
 };

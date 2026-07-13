@@ -11,6 +11,14 @@ Routes:
   PATCH  /api/drafting-sessions/{id}/title    — rename session
   DELETE /api/drafting-sessions/{id}          — delete session
   POST   /api/drafting-sessions/{id}/messages — append a message to thread
+
+Admin prompt management:
+  GET    /api/prompts                         — list all templates (admin only)
+  POST   /api/prompts                         — create new template (admin only)
+  GET    /api/prompts/{id}                    — get single template (admin only)
+  PUT    /api/prompts/{id}                    — update template (admin only)
+  DELETE /api/prompts/{id}                    — delete template (admin only)
+  POST   /api/prompts/reorder                 — reorder templates (admin only)
 """
 import uuid
 
@@ -18,7 +26,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_role
 from backend.database import get_db
 from backend.models.user import User
 from backend.services import drafting_sessions as svc
@@ -161,3 +169,105 @@ async def add_message(
         draft_response_id=draft_response_id or None,
     )
     return {"message": msg.to_dict()}
+
+
+# ── Admin: Prompt Template Management ───────────────────────────────────────────
+
+# Create a separate router for admin prompts endpoints
+prompts_router = APIRouter(prefix="/api/prompts", tags=["Prompts (Admin)"])
+
+
+@prompts_router.get("", dependencies=[Depends(require_role("admin"))])
+async def list_all_templates(
+    include_inactive: bool = Query(False),
+    current_user: User = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all prompt templates (admin only). Include inactive if requested."""
+    templates = await svc.list_all_templates(db, include_inactive=include_inactive)
+    return {"templates": templates}
+
+
+@prompts_router.post("", status_code=201, dependencies=[Depends(require_role("admin"))])
+async def create_template(
+    label: str = Form(...),
+    prompt_text: str = Form(...),
+    icon: str = Form("ti-sparkles"),
+    display_order: int = Form(0),
+    current_user: User = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new prompt template (admin only)."""
+    template = await svc.create_template(
+        db,
+        label=label.strip(),
+        prompt_text=prompt_text.strip(),
+        icon=icon.strip(),
+        display_order=display_order,
+    )
+    return {"template": template.to_dict()}
+
+
+@prompts_router.get("/{template_id}", dependencies=[Depends(require_role("admin"))])
+async def get_template(
+    template_id: uuid.UUID,
+    current_user: User = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single prompt template (admin only)."""
+    template = await svc.get_template_by_id(db, str(template_id))
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"template": template.to_dict()}
+
+
+@prompts_router.put("/{template_id}", dependencies=[Depends(require_role("admin"))])
+async def update_template(
+    template_id: uuid.UUID,
+    label: str = Form(None),
+    prompt_text: str = Form(None),
+    icon: str = Form(None),
+    display_order: int = Form(None),
+    is_active: bool = Form(None),
+    current_user: User = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a prompt template (admin only)."""
+    template = await svc.update_template(
+        db,
+        str(template_id),
+        label=label.strip() if label else None,
+        prompt_text=prompt_text.strip() if prompt_text else None,
+        icon=icon.strip() if icon else None,
+        display_order=display_order,
+        is_active=is_active,
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"template": template.to_dict()}
+
+
+@prompts_router.delete("/{template_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
+async def delete_template(
+    template_id: uuid.UUID,
+    current_user: User = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a prompt template (soft delete, admin only)."""
+    deleted = await svc.delete_template(db, str(template_id))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+
+@prompts_router.post("/reorder", dependencies=[Depends(require_role("admin"))])
+async def reorder_templates(
+    template_ids: list[str] = Form(...),
+    current_user: User = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reorder prompt templates (admin only)."""
+    success = await svc.reorder_templates(db, template_ids)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to reorder templates")
+    templates = await svc.list_all_templates(db, include_inactive=True)
+    return {"templates": templates}

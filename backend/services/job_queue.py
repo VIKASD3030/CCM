@@ -3,7 +3,6 @@ Job queue service for managing background jobs with ARQ and pg_notify.
 """
 import json
 import uuid
-import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -35,13 +34,54 @@ def _get_notify_dsn() -> str:
     return str(settings.database.url).replace("+asyncpg", "")
 
 
-async def get_arq_redis() -> ArqRedis:
-    """Get ARQ Redis connection pool."""
+async def get_arq_redis() -> Optional[ArqRedis]:
+    """Get ARQ Redis connection pool, or None if Redis is disabled/unreachable.
+
+    Redis is optional for the initial stage. When it's not configured (or not
+    reachable), callers fall back to running jobs synchronously in-process —
+    see `enqueue_job` / `run_job` below.
+    """
+    if not settings.redis.url:
+        return None
+
     from arq.connections import create_pool
     import asyncio
-    settings_redis = RedisSettings.from_dsn(str(settings.redis.url))
-    pool = await asyncio.wait_for(create_pool(settings_redis), timeout=3.0)
-    return pool
+    try:
+        settings_redis = RedisSettings.from_dsn(str(settings.redis.url))
+        pool = await asyncio.wait_for(create_pool(settings_redis), timeout=3.0)
+        return pool
+    except Exception as e:
+        logger.warning("redis.unavailable", error=str(e))
+        return None
+
+
+async def _run_job_inline(job_type: str, job_id: str, payload: dict):
+    """Execute a job's task function directly, without a Redis-backed queue.
+
+    Used when Redis is not configured. Task functions in worker.py already
+    update job status and pg_notify on their own, so this just invokes them.
+    """
+    from backend import worker
+    task_fn = getattr(worker, job_type, None)
+    if task_fn is None:
+        logger.error("job.inline_run_failed", job_id=job_id, job_type=job_type, error="unknown job_type")
+        return
+    ctx = {"job_id": job_id}
+    try:
+        await task_fn(ctx, **payload)
+    except Exception as e:
+        logger.error("job.inline_run_failed", job_id=job_id, job_type=job_type, error=str(e))
+
+
+async def run_job(arq_redis: Optional[ArqRedis], job_type: str, **kwargs):
+    """Enqueue a fire-and-forget job via ARQ, or run it inline if Redis is unavailable.
+
+    Use for jobs that aren't tracked in the `jobs` table (e.g. webhook delivery).
+    """
+    if arq_redis is not None:
+        await arq_redis.enqueue_job(job_type, **kwargs)
+    else:
+        await _run_job_inline(job_type, kwargs.get("job_id", ""), kwargs)
 
 
 async def create_job(
@@ -79,9 +119,14 @@ async def enqueue_job(
     job = await create_job(db, job_type, payload, created_by, priority, max_attempts)
     await db.commit()
 
-    # Enqueue in ARQ
-    await arq_redis.enqueue_job(job_type, job_id=str(job.id), **payload)
-    logger.info("job.enqueued", job_id=str(job.id), job_type=job_type)
+    if arq_redis is not None:
+        # Enqueue in ARQ
+        await arq_redis.enqueue_job(job_type, job_id=str(job.id), **payload)
+        logger.info("job.enqueued", job_id=str(job.id), job_type=job_type)
+    else:
+        # No Redis configured — run the job synchronously in-process.
+        logger.info("job.running_inline", job_id=str(job.id), job_type=job_type)
+        await _run_job_inline(job_type, str(job.id), payload)
 
     return job
 

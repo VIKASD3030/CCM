@@ -4,11 +4,12 @@ Authentication API endpoints.
 import uuid as uuid_lib
 import hashlib
 import secrets
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Body, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -24,9 +25,10 @@ from backend.config import get_settings
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.password_reset import PasswordResetToken
+from backend.models.revoked_token import RevokedToken
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 settings = get_settings()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -38,7 +40,12 @@ REFRESH_TOKEN_EXPIRE_DAYS = settings.auth.refresh_token_expire_days
 
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    if not hashed_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except ValueError:
+        return False
 
 
 def get_password_hash(password):
@@ -58,7 +65,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 def create_refresh_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire})
+    # Each refresh token gets its own jti so it can be individually revoked on
+    # logout, without invalidating the user's other refresh tokens/sessions.
+    to_encode.update({"exp": expire, "jti": str(uuid_lib.uuid4())})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -170,7 +179,7 @@ async def get_me(
 @limiter.limit("10/minute")
 async def refresh_token(
     request: Request,
-    refresh_token: str,
+    refresh_token: str = Body(..., embed=True),
     db: AsyncSession = Depends(get_db)
 ):
     """Refresh access token using refresh token."""
@@ -182,12 +191,22 @@ async def refresh_token(
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
-        if user_id is None:
+        jti: str = payload.get("jti")
+        if user_id is None or jti is None:
             raise credentials_exception
-    except JWTError:
+        jti = uuid_lib.UUID(jti)
+    except (JWTError, ValueError):
         raise credentials_exception
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    revoked = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+    if revoked.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
@@ -202,8 +221,36 @@ async def refresh_token(
 
 
 @router.post("/logout")
-async def logout():
-    """Logout — client-side token removal is sufficient."""
+async def logout(
+    refresh_token: str = Body(None, embed=True),
+    db: AsyncSession = Depends(get_db),
+):
+    """Logout — revokes the refresh token server-side (by its jti) so it
+    can no longer be used to mint new access tokens, in addition to the
+    client discarding it.
+    """
+    if not refresh_token:
+        return {"message": "Successfully logged out"}
+
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        jti = uuid_lib.UUID(jti) if jti else None
+    except (JWTError, ValueError):
+        return {"message": "Successfully logged out"}
+
+    if jti:
+        existing = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+        if not existing.scalar_one_or_none():
+            expires_at = (
+                datetime.fromtimestamp(exp, tz=timezone.utc)
+                if exp
+                else datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+            )
+            db.add(RevokedToken(jti=jti, expires_at=expires_at))
+            await db.commit()
+
     return {"message": "Successfully logged out"}
 
 
@@ -247,9 +294,9 @@ async def forgot_password(
         )
 
         if sent:
-            logger.info("Password reset email sent", extra={"email": email})
+            logger.info("auth.password_reset_email_sent", email=email)
         else:
-            logger.info("Password reset email skipped (SMTP not configured)", extra={"email": email, "link": reset_link})
+            logger.info("auth.password_reset_email_skipped", email=email, link=reset_link, reason="SMTP not configured")
 
     return {"message": "If an account with that email exists, a reset link has been sent."}
 
@@ -294,7 +341,7 @@ async def reset_password(
     reset.used = True
     await db.commit()
 
-    logger.info("Password reset successful", extra={"user_id": str(user.id)})
+    logger.info("auth.password_reset_successful", user_id=str(user.id))
     return {"message": "Password has been reset successfully."}
 
 
@@ -327,7 +374,7 @@ async def register(
     await db.flush()
     await db.commit()
 
-    logger.info("auth.user.created", extra={"email": email, "role": role, "created_by": str(current_user.id)})
+    logger.info("auth.user_created", email=email, role=role, created_by=str(current_user.id))
     return {"status": "created", "user": user.to_dict()}
 
 
@@ -358,7 +405,7 @@ async def delete_user(
 
     await db.delete(user)
     await db.commit()
-    logger.info("auth.user.deleted", extra={"user_id": user_id, "deleted_by": str(current_user.id)})
+    logger.info("auth.user_deleted", user_id=user_id, deleted_by=str(current_user.id))
     return {"status": "deleted"}
 
 
@@ -455,6 +502,8 @@ async def google_callback(
     user = result.scalar_one_or_none()
 
     if user:
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled.")
         user.google_id = google_id
         if name and not user.name:
             user.name = name
@@ -480,8 +529,9 @@ async def google_callback(
     )
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
-    # Redirect back to frontend with tokens (fragment for security)
-    redirect_url = f"{settings.app_base_url}/login?token={access_token}&refresh={refresh_token}"
+    # Redirect back to frontend with tokens in the fragment so they are not
+    # sent back to the server in subsequent request URLs.
+    redirect_url = f"{settings.app_base_url}/login#token={access_token}&refresh={refresh_token}"
     return RedirectResponse(url=redirect_url)
 
 

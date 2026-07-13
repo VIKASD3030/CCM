@@ -2,12 +2,12 @@
 Database engine, session factory, and dependency injection for FastAPI.
 """
 
-import logging
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from backend.config import get_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 settings = get_settings()
 
 # Engine configuration for PostgreSQL + asyncpg
@@ -57,7 +57,7 @@ async def init_db():
     async with engine.begin() as conn:
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables created")
+        logger.info("db.tables_created")
 
         # Add storage_path column if missing (added in v1.1)
         result = await conn.execute(
@@ -65,7 +65,7 @@ async def init_db():
                  "WHERE table_name='knowledge_documents' AND column_name='storage_path'")
         )
         if not result.fetchone():
-            logger.info("Adding storage_path column to knowledge_documents...")
+            logger.info("db.adding_column", table="knowledge_documents", column="storage_path")
             await conn.execute(text(
                 "ALTER TABLE knowledge_documents ADD COLUMN storage_path VARCHAR(500)"
             ))

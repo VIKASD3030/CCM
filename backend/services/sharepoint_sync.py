@@ -5,7 +5,7 @@ into the ingestion pipeline, tagging documents with the correct project_id.
 Logs each run in sharepoint_sync_log.
 """
 import uuid
-import logging
+import structlog
 from datetime import datetime, timezone
 
 import httpx
@@ -20,7 +20,7 @@ from backend.models.document import KnowledgeDocument, DocumentChunk
 from backend.services.knowledge_base import extract_text_from_bytes, chunk_text, generate_embeddings, ingest_document
 from backend.services.storage import storage_backend
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 settings = get_settings()
 
 MICROSOFT_GRAPH_BASE = "https://graph.microsoft.com/v1.0"
@@ -42,7 +42,7 @@ async def _fetch_site_drive_items(site_id: str, folder_path: str = "") -> list[d
     """Fetch files from a SharePoint site's default document library."""
     headers = _get_auth_headers()
     if not headers:
-        logger.warning("No SharePoint access token configured — using mock data")
+        logger.warning("sharepoint.no_access_token_configured")
         return []
 
     async with httpx.AsyncClient(base_url=MICROSOFT_GRAPH_BASE, headers=headers, timeout=30.0) as client:
@@ -52,7 +52,7 @@ async def _fetch_site_drive_items(site_id: str, folder_path: str = "") -> list[d
             drives_resp.raise_for_status()
             drives = drives_resp.json().get("value", [])
             if not drives:
-                logger.warning(f"No drives found for site {site_id}")
+                logger.warning("sharepoint.no_drives_found", site_id=site_id)
                 return []
 
             drive_id = drives[0]["id"]
@@ -77,7 +77,7 @@ async def _fetch_site_drive_items(site_id: str, folder_path: str = "") -> list[d
                 if "file" in item and item.get("@microsoft.graph.downloadUrl")
             ]
         except Exception as e:
-            logger.error(f"Failed to fetch SharePoint drive items for site {site_id}: {e}")
+            logger.error("sharepoint.fetch_drive_items_failed", site_id=site_id, error=str(e))
             return []
 
 
@@ -157,7 +157,7 @@ async def sync_project_sharepoint(project_id: str) -> dict:
                     result["files_synced"] += 1
 
                 except Exception as e:
-                    logger.warning(f"Failed to sync {filename}: {e}")
+                    logger.warning("sharepoint.file_sync_failed", filename=filename, error=str(e))
                     result["errors"].append(f"{filename}: {str(e)}")
 
             # Handle deletions: remove docs that no longer exist in SharePoint

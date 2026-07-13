@@ -104,15 +104,18 @@ def check():
         except Exception as e:
             results["database"] = {"status": "unhealthy", "error": str(e)}
 
-        # Redis check
-        try:
-            import redis.asyncio as aioredis
-            r = aioredis.Redis.from_url(str(settings.redis.url))
-            await r.ping()
-            await r.aclose()
-            results["redis"] = {"status": "ok"}
-        except Exception as e:
-            results["redis"] = {"status": "degraded", "error": str(e)}
+        # Redis check (optional — jobs run inline when not configured)
+        if not settings.redis.url:
+            results["redis"] = {"status": "disabled", "info": "not configured — jobs run in-process"}
+        else:
+            try:
+                import redis.asyncio as aioredis
+                r = aioredis.Redis.from_url(str(settings.redis.url))
+                await r.ping()
+                await r.aclose()
+                results["redis"] = {"status": "ok"}
+            except Exception as e:
+                results["redis"] = {"status": "degraded", "error": str(e)}
 
         overall = "healthy"
         for name, check_result in results.items():

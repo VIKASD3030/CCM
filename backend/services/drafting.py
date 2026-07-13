@@ -4,7 +4,7 @@ RAG loop: retrieve relevant context from knowledge base -> generate draft respon
 """
 
 import uuid
-import logging
+import structlog
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,12 +15,12 @@ from backend.models.draft import DraftResponse
 from backend.models.audit import AuditEntry
 from backend.services.knowledge_base import search_similar_chunks
 from backend.services.webhook_service import dispatch_event
-from backend.services import gemini as gemini_client
+from backend.services import openai_client
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 settings = get_settings()
 
-draft_model = gemini_client.get_model()
+draft_model = openai_client.get_model()
 
 DRAFTING_SYSTEM_PROMPT = """You are a professional correspondence manager specializing in contract and business communications. Your job is to draft formal, accurate, and professional responses to client letters.
 
@@ -161,14 +161,14 @@ async def generate_draft(
     )
 
     try:
-        draft_text = await gemini_client.call_gemini_async(
+        draft_text = await openai_client.call_openai_async(
             prompt=f"{DRAFTING_SYSTEM_PROMPT}\n\n{prompt}",
             model=draft_model,
             temperature=0.7,
             max_output_tokens=3000,
         )
     except Exception as e:
-        logger.error(f"Draft generation failed: {e}")
+        logger.error("draft.generation_failed", letter_id=str(letter_id), error=str(e))
         raise
 
     version_count = await db.execute(
@@ -208,7 +208,7 @@ async def generate_draft(
     db.add(audit)
     await db.flush()
 
-    logger.info(f"Generated draft v{version} for letter {letter_id} by user {user_id}")
+    logger.info("draft.generated", version=version, letter_id=str(letter_id), user_id=str(user_id) if user_id else None)
 
     # Dispatch webhook (fire-and-forget)
     await dispatch_event("draft.generated", {
@@ -274,24 +274,37 @@ async def get_drafts_for_letter(
     letter_id: str,
     user_id: uuid.UUID = None,
     user_role: str = None,
-) -> list[dict]:
-    """Get all draft versions for a letter with row-level security."""
+    skip: int = 0,
+    limit: int = 50,
+) -> tuple[list[dict], int]:
+    """Get draft versions for a letter with row-level security and pagination.
+    Returns (drafts, total_count).
+    """
     letter = await db.get(InboundLetter, str(letter_id))
     if not letter:
-        return []
+        return [], 0
 
     if user_role not in ["admin", "reviewer"] and user_id is not None:
         if letter.created_by != user_id:
-            return []
+            return [], 0
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(DraftResponse)
+        .where(DraftResponse.letter_id == str(letter_id))
+    )
+    total = count_result.scalar() or 0
 
     stmt = (
         select(DraftResponse)
         .where(DraftResponse.letter_id == str(letter_id))
         .order_by(DraftResponse.version.desc())
+        .offset(skip)
+        .limit(limit)
     )
     result = await db.execute(stmt)
     drafts = result.scalars().all()
-    return [d.to_dict() for d in drafts]
+    return [d.to_dict() for d in drafts], total
 
 
 async def get_draft_by_id(

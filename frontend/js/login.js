@@ -6,11 +6,12 @@ const API_BASE = '';
 
 const LoginPage = {
     init() {
-        // Handle Google OAuth redirect with token in query params
-        const params = new URLSearchParams(window.location.search);
+        // Handle Google OAuth redirect with tokens in URL fragment.
+        const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search);
         const tokenParam = params.get('token');
         if (tokenParam) {
             this.setToken(tokenParam);
+            this.setRefreshToken(params.get('refresh'));
             const userParam = params.get('user');
             if (userParam) {
                 try { this.setUser(JSON.parse(decodeURIComponent(userParam))); } catch {}
@@ -82,8 +83,17 @@ const LoginPage = {
         localStorage.setItem('ccm_access_token', token);
     },
 
+    getRefreshToken() {
+        return localStorage.getItem('ccm_refresh_token');
+    },
+
+    setRefreshToken(token) {
+        if (token) localStorage.setItem('ccm_refresh_token', token);
+    },
+
     removeToken() {
         localStorage.removeItem('ccm_access_token');
+        localStorage.removeItem('ccm_refresh_token');
         localStorage.removeItem('ccm_user');
     },
 
@@ -201,6 +211,7 @@ const LoginPage = {
 
             const data = await response.json();
             this.setToken(data.access_token);
+            this.setRefreshToken(data.refresh_token);
             this.setUser(data.user);
 
             window.location.replace('/');
@@ -357,7 +368,16 @@ const LoginPage = {
     /* ── Public auth helper for SPA pages ── */
 
     logout() {
+        const refreshToken = this.getRefreshToken();
         this.removeToken();
+        if (refreshToken) {
+            // Revoke server-side; fire-and-forget so logout isn't blocked by it.
+            fetch(`${API_BASE}/api/auth/logout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: refreshToken }),
+            }).catch(() => {});
+        }
         window.location.replace('/login');
     },
 };

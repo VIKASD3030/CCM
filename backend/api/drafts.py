@@ -132,9 +132,14 @@ async def regenerate_draft(
 @router.get("/letter/{letter_id}")
 async def get_drafts_for_letter(
     letter_id: uuid.UUID,
+    skip: int = 0,
+    limit: int = 50,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all draft versions for a letter."""
-    drafts = await draft_service.get_drafts_for_letter(db, str(letter_id), current_user.id, current_user.role)
-    return {"drafts": drafts}
+    """Get draft versions for a letter with pagination. Default limit is 50, max 200."""
+    limit = min(limit, 200)
+    drafts, total = await draft_service.get_drafts_for_letter(
+        db, str(letter_id), current_user.id, current_user.role, skip=skip, limit=limit
+    )
+    return {"drafts": drafts, "total": total, "skip": skip, "limit": limit}

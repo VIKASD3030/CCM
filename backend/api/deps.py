@@ -2,7 +2,6 @@
 API dependencies for authentication and authorization.
 """
 
-from typing import Generator
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -15,8 +14,8 @@ from backend.models.user import User
 
 settings = get_settings()
 
-# OAuth2 scheme for token extraction (allow missing token in dev)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+# OAuth2 scheme for token extraction.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 # JWT settings
 SECRET_KEY = settings.auth.secret_key
@@ -24,13 +23,12 @@ ALGORITHM = "HS256"
 
 
 async def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
+    token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """
     Dependency to get the current authenticated user.
     Raises HTTPException if token is invalid or user not found.
-    Falls back to auto-login the first admin/user in development environment.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -38,29 +36,19 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    user = None
-    if token:
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            user_id: str = payload.get("sub")
-            if user_id:
-                result = await db.execute(select(User).where(User.id == user_id))
-                user = result.scalar_one_or_none()
-        except JWTError:
-            pass
-            
-    if user is None:
-        if settings.environment == "development":
-            # Auto-login the first admin or user in development environment
-            result = await db.execute(select(User).where(User.role == "admin"))
-            user = result.scalars().first()
-            if not user:
-                result = await db.execute(select(User))
-                user = result.scalars().first()
-            if user:
-                return user
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if not user_id:
+            raise credentials_exception
+    except JWTError:
         raise credentials_exception
-        
+
+    result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise credentials_exception
+
     return user
 
 

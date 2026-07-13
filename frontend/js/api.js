@@ -233,8 +233,8 @@ const API = {
         refresh(refreshToken) {
             return API.request('/api/auth/refresh', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ refresh_token: refreshToken }).toString(),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: refreshToken }),
             });
         },
         register(email, password, role) {
@@ -313,6 +313,41 @@ const API = {
                 role,
                 content,
                 draft_response_id: draftResponseId || '',
+            });
+        },
+    },
+
+    // ─── Prompts (Admin) ───────────────────────────────
+    prompts: {
+        list(includeInactive = false) {
+            return API.request(`/api/prompts?include_inactive=${includeInactive}`);
+        },
+        get(templateId) {
+            return API.request(`/api/prompts/${templateId}`);
+        },
+        create(label, promptText, icon = 'ti-sparkles', displayOrder = 0) {
+            return API.postForm('/api/prompts', {
+                label,
+                prompt_text: promptText,
+                icon,
+                display_order: displayOrder,
+            });
+        },
+        update(templateId, label, promptText, icon, displayOrder, isActive) {
+            return API.putForm(`/api/prompts/${templateId}`, {
+                label: label || undefined,
+                prompt_text: promptText || undefined,
+                icon: icon || undefined,
+                display_order: displayOrder !== undefined ? displayOrder : undefined,
+                is_active: isActive !== undefined ? isActive : undefined,
+            });
+        },
+        delete(templateId) {
+            return API.request(`/api/prompts/${templateId}`, { method: 'DELETE' });
+        },
+        reorder(templateIds) {
+            return API.postForm('/api/prompts/reorder', {
+                template_ids: templateIds.join(','),
             });
         },
     },

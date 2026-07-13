@@ -37,7 +37,7 @@ from backend.api.notifications import router as notifications_router
 from backend.api.files import router as files_router
 from backend.api.health import router as health_router
 from backend.api.projects import router as projects_router
-from backend.api.drafting_sessions import router as drafting_sessions_router
+from backend.api.drafting_sessions import router as drafting_sessions_router, prompts_router
 
 # Ensure all models are imported so Base.metadata knows about them
 import backend.models  # noqa: F401
@@ -135,6 +135,21 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # CSP: everything is same-origin. script-src allows 'unsafe-inline' because
+    # the frontend renders onclick="..." handlers in templated HTML (app.js,
+    # drafting.js, etc.) — tightening that further means refactoring those to
+    # addEventListener first. Still blocks any *externally* injected/loaded script.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
     return response
 
 
@@ -153,10 +168,17 @@ async def metrics_middleware(request: Request, call_next):
 
 
 # CORS
-allowed_origins = settings.allowed_origins or ["*"]
+# Never fall back to "*" here: allow_credentials=True + a wildcard origin is
+# rejected by browsers anyway (and is a misconfiguration if it weren't), since
+# it would let any site read authenticated responses. Require explicit origins.
+if not settings.allowed_origins:
+    if settings.environment == "production":
+        raise RuntimeError("ALLOWED_ORIGINS must be set in production — refusing to start with no allowed CORS origins.")
+    logger.warning("cors.no_allowed_origins_configured", info="Set ALLOWED_ORIGINS in .env for cross-origin frontend access.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -175,6 +197,7 @@ app.include_router(files_router)
 app.include_router(health_router)
 app.include_router(projects_router)
 app.include_router(drafting_sessions_router)
+app.include_router(prompts_router)
 
 # Serve frontend static files
 app.mount("/css", StaticFiles(directory=str(FRONTEND_DIR / "css")), name="css")

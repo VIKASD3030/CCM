@@ -46,7 +46,8 @@ async def dispatch_event(event: str, payload: dict):
     for webhook in webhooks:
         try:
             arq_redis = await get_arq_redis()
-            await arq_redis.enqueue_job(
+            await run_job(
+                arq_redis,
                 "deliver_webhook_task",
                 webhook_id=str(webhook.id),
                 event=event,
@@ -168,7 +169,8 @@ async def send_test_webhook(session: AsyncSession, webhook_id: str) -> dict:
     }
 
     arq_redis = await get_arq_redis()
-    await arq_redis.enqueue_job(
+    await run_job(
+        arq_redis,
         "deliver_webhook_task",
         webhook_id=webhook_id,
         event="test.ping",
@@ -180,4 +182,4 @@ async def send_test_webhook(session: AsyncSession, webhook_id: str) -> dict:
 
 # Import at bottom to avoid circular imports
 from backend.database import async_session_factory
-from backend.services.job_queue import get_arq_redis
+from backend.services.job_queue import get_arq_redis, run_job

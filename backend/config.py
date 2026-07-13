@@ -6,7 +6,7 @@ Uses nested settings model with env_nested_delimiter="__".
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import BaseModel, PostgresDsn, RedisDsn, Field, field_validator
+from pydantic import BaseModel, PostgresDsn, RedisDsn, Field, field_validator, model_validator
 from typing import List, Literal, Optional
 from pathlib import Path
 
@@ -21,7 +21,9 @@ class DatabaseSettings(BaseModel):
 
 
 class RedisSettings(BaseModel):
-    url: RedisDsn = Field(..., description="Redis connection URL")
+    # Optional for the initial stage: without Redis, background jobs run
+    # synchronously in-process instead of via the ARQ queue (see job_queue.py).
+    url: Optional[RedisDsn] = Field(None, description="Redis connection URL (optional — omit to run without Redis)")
 
 
 class StorageSettings(BaseModel):
@@ -38,10 +40,10 @@ class AISettings(BaseModel):
     max_tokens: int = Field(4096, description="Maximum tokens for AI model")
 
 
-class KnowerSettings(BaseModel):
-    api_key: str = Field(..., description="Knower API key")
-    api_base: str = Field('https://api.knower.ai/v1', description="Knower API base URL")
-    model: str = Field('gpt-5.5', description="Knower model name")
+# class KnowerSettings(BaseModel):
+#     api_key: str = Field(..., description="Knower API key")
+#     api_base: str = Field('https://api.knower.ai/v1', description="Knower API base URL")
+#     model: str = Field('gpt-5.5', description="Knower model name")
 
 
 class AuthSettings(BaseModel):
@@ -52,6 +54,13 @@ class AuthSettings(BaseModel):
     google_client_secret: str | None = Field(None, description="Google OAuth client secret")
     google_allowed_domains: list[str] | None = Field(None, description="Allowed email domains for Google sign-in")
 
+    @field_validator("google_allowed_domains", mode="before")
+    @classmethod
+    def parse_google_allowed_domains(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -59,8 +68,8 @@ class Settings(BaseSettings):
     # Database
     database: DatabaseSettings
 
-    # Redis
-    redis: RedisSettings
+    # Redis (optional — see RedisSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
 
     # Storage
     storage: StorageSettings
@@ -69,7 +78,7 @@ class Settings(BaseSettings):
     ai: AISettings
 
     # Knower API
-    knower: KnowerSettings
+    # knower: KnowerSettings
 
     # Auth
     auth: AuthSettings
@@ -94,13 +103,14 @@ class Settings(BaseSettings):
 
     # Prometheus
     enable_metrics: bool = Field(True, description="Enable Prometheus metrics")
+    metrics_allowed_cidr: Optional[str] = Field(None, description="CIDR allowed to scrape /api/metrics")
 
     # PgBouncer
     use_pgbouncer: bool = Field(True, description="Use PgBouncer")
 
-    @property
-    def knower_api_key(self) -> str:
-        return self.knower.api_key
+    # @property
+    # def knower_api_key(self) -> str:
+    #     return self.knower.api_key
 
     @property
     def openai_api_key(self) -> str:
@@ -117,6 +127,30 @@ class Settings(BaseSettings):
     @property
     def chunk_overlap(self) -> int:
         return 50
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @model_validator(mode="after")
+    def validate_enterprise_runtime(self):
+        placeholder_secrets = {
+            "your-super-secret-key-change-this-to-at-least-32-characters",
+            "your-webhook-secret-key-change-this",
+        }
+        if self.environment == "production":
+            if not self.allowed_origins:
+                raise ValueError("ALLOWED_ORIGINS must be set in production")
+            if self.auth.secret_key in placeholder_secrets:
+                raise ValueError("AUTH__SECRET_KEY must be changed before production")
+            if self.webhook_secret_key in placeholder_secrets:
+                raise ValueError("WEBHOOK_SECRET_KEY must be changed before production")
+            if self.debug:
+                raise ValueError("DEBUG must be false in production")
+        return self
 
     model_config = {
         "env_file": ".env",

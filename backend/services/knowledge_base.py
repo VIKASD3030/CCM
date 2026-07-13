@@ -4,19 +4,19 @@ Handles document upload, text extraction, chunking, embedding, and vector search
 PostgreSQL 16 with in-Python cosine similarity for vector search.
 """
 import uuid
-import logging
+import structlog
 
 from backend.config import get_settings
 from backend.models.document import KnowledgeDocument, DocumentChunk
 from backend.models.audit import AuditEntry
 from backend.services.webhook_service import dispatch_event
 from backend.services.storage import storage_backend
-from backend.services import gemini as gemini_client
+from backend.services import openai_client
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 settings = get_settings()
 
 
@@ -28,7 +28,7 @@ async def extract_text_from_file(file_path: str, file_type: str) -> str:
             import pymupdf4llm
             return pymupdf4llm.to_markdown(file_path)
         except Exception as e:
-            logger.warning(f"pymupdf4llm failed, falling back to pymupdf: {e}")
+            logger.warning("kb.pymupdf4llm_failed", error=str(e))
             import pymupdf
             doc = pymupdf.open(file_path)
             text = ""
@@ -46,7 +46,7 @@ async def extract_text_from_file(file_path: str, file_type: str) -> str:
         with open(file_path, "rb") as image_file:
             image_bytes = image_file.read()
 
-        response = await gemini_client.call_gemini_vision_async(
+        response = await openai_client.call_openai_vision_async(
             text="Extract all text from this image accurately. Return only the extracted text.",
             image_data=image_bytes,
             mime_type=mime_type,
@@ -106,11 +106,11 @@ async def generate_embeddings(texts: list[str]) -> list[list[float]]:
     for i in range(0, len(texts), batch_size):
         batch = texts[i: i + batch_size]
         try:
-            batch_embeddings = await gemini_client.generate_embedding_async(batch)
+            batch_embeddings = await openai_client.generate_embedding_async(batch)
             for emb in batch_embeddings:
                 embeddings.append(emb)
         except Exception as e:
-            logger.error(f"Embedding generation failed for batch {i}: {e}")
+            logger.error("kb.embedding_generation_failed", batch_start=i, error=str(e))
             embeddings.extend([None] * len(batch))
 
     return embeddings
@@ -215,7 +215,7 @@ async def ingest_document(
         db.add(audit)
 
         await db.flush()
-        logger.info(f"Ingested document '{filename}': {len(chunks)} chunks indexed by user {user_id}")
+        logger.info("kb.document_ingested", filename=filename, chunks=len(chunks), user_id=str(user_id) if user_id else None)
 
         # Dispatch webhook (fire-and-forget)
         await dispatch_event("kb.document_added", {
@@ -228,7 +228,7 @@ async def ingest_document(
 
     except Exception as e:
         doc.status = "failed"
-        logger.error(f"Failed to ingest document '{filename}': {e}")
+        logger.error("kb.document_ingest_failed", filename=filename, error=str(e))
         raise
 
     return doc

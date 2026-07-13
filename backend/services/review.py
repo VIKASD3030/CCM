@@ -4,7 +4,7 @@ Handles the human-in-the-loop workflow: approve, reject, archive, audit trail.
 Dispatches webhooks and email notifications on status changes.
 """
 import uuid
-import logging
+import structlog
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +17,9 @@ from backend.models.user import User
 from backend.models.email_notification import EmailNotificationSetting
 from backend.services.knowledge_base import ingest_document
 from backend.services.webhook_service import dispatch_event
-from backend.services.job_queue import get_arq_redis
+from backend.services.job_queue import get_arq_redis, run_job
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 settings = get_settings()
 
 
@@ -43,7 +43,8 @@ async def _notify_reviewers(db: AsyncSession, draft: DraftResponse, letter: Inbo
 
         arq_redis = await get_arq_redis()
         for reviewer in reviewers:
-            await arq_redis.enqueue_job(
+            await run_job(
+                arq_redis,
                 "send_email_task",
                 template_name="review_needed.html",
                 recipients=[reviewer.email],
@@ -56,7 +57,7 @@ async def _notify_reviewers(db: AsyncSession, draft: DraftResponse, letter: Inbo
                 },
             )
     except Exception as e:
-        logger.warning(f"Failed to send review notifications: {e}")
+        logger.warning("review.notify_reviewers_failed", error=str(e))
 
 
 async def _notify_drafter(
@@ -113,7 +114,8 @@ async def _notify_drafter(
             drafter = user_result.scalar_one_or_none()
             if drafter:
                 arq_redis = await get_arq_redis()
-                await arq_redis.enqueue_job(
+                await run_job(
+                    arq_redis,
                     "send_email_task",
                     template_name=template_name,
                     recipients=[drafter.email],
@@ -121,7 +123,7 @@ async def _notify_drafter(
                     template_data=template_data,
                 )
     except Exception as e:
-        logger.warning(f"Failed to send drafter notification: {e}")
+        logger.warning("review.notify_drafter_failed", error=str(e))
 
 
 async def approve_draft(
@@ -190,9 +192,9 @@ async def approve_draft(
             category="response",
             user_id=user_id,
         )
-        logger.info(f"Fed approved response for letter {draft.letter_id} back into knowledge base by user {user_id}")
+        logger.info("review.approved_response_fed_to_kb", letter_id=str(draft.letter_id), user_id=str(user_id) if user_id else None)
     except Exception as e:
-        logger.warning(f"Failed to feed response back to knowledge base: {e}")
+        logger.warning("review.feed_kb_failed", error=str(e))
 
     await db.flush()
 

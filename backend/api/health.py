@@ -3,9 +3,9 @@ Enhanced health check endpoint.
 Checks all 5 dependencies: database, pgvector, redis, storage, OpenAI API.
 """
 import time
-import os
+from ipaddress import ip_address, ip_network
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import text
 
 from backend.config import get_settings
@@ -63,19 +63,22 @@ async def health_check():
             "info": "using native array fallback",
         }
 
-    # Redis check
-    try:
-        start = time.monotonic()
-        import redis.asyncio as aioredis
-        r = aioredis.Redis.from_url(str(settings.redis.url))
-        await r.ping()
-        await r.aclose()
-        latency_ms = int((time.monotonic() - start) * 1000)
-        checks["redis"] = {"status": "ok", "latency_ms": latency_ms}
-    except Exception as e:
-        checks["redis"] = {"status": "degraded", "error": str(e)}
-        if overall == "healthy":
-            overall = "degraded"
+    # Redis check (optional — jobs run inline when not configured)
+    if not settings.redis.url:
+        checks["redis"] = {"status": "disabled", "info": "not configured — jobs run in-process"}
+    else:
+        try:
+            start = time.monotonic()
+            import redis.asyncio as aioredis
+            r = aioredis.Redis.from_url(str(settings.redis.url))
+            await r.ping()
+            await r.aclose()
+            latency_ms = int((time.monotonic() - start) * 1000)
+            checks["redis"] = {"status": "ok", "latency_ms": latency_ms}
+        except Exception as e:
+            checks["redis"] = {"status": "degraded", "error": str(e)}
+            if overall == "healthy":
+                overall = "degraded"
 
     # Storage check
     try:
@@ -117,20 +120,28 @@ async def health_check():
 
 
 @router.get("/api/metrics")
-async def metrics_endpoint():
+async def metrics_endpoint(request: Request):
     """Prometheus metrics endpoint.
-    No auth required (Prometheus scrapes this).
+    Access can be restricted with METRICS_ALLOWED_CIDR.
     """
-    from backend.config import get_settings
-    settings = get_settings()
+    if not settings.enable_metrics:
+        raise HTTPException(status_code=404, detail="Metrics are disabled.")
 
-    # Check METRICS_ALLOWED_CIDR if configured
-    allowed_cidr = os.getenv("METRICS_ALLOWED_CIDR", "")
+    allowed_cidr = settings.metrics_allowed_cidr
     if allowed_cidr:
-        from ipaddress import ip_address, ip_network
-        # This would need request.client.host via FastAPI Request object
-        # For simplicity, we skip IP restriction here
-        pass
+        client_host = request.client.host if request.client else ""
+        if not client_host:
+            raise HTTPException(status_code=403, detail="Metrics access denied.")
+        try:
+            allowed_network = ip_network(allowed_cidr, strict=False)
+        except ValueError:
+            raise HTTPException(status_code=500, detail="Invalid METRICS_ALLOWED_CIDR configuration.")
+        try:
+            client_ip = ip_address(client_host)
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Metrics access denied.")
+        if client_ip not in allowed_network:
+            raise HTTPException(status_code=403, detail="Metrics access denied.")
 
     metrics_data = await generate_metrics()
     from fastapi.responses import Response as FastResponse

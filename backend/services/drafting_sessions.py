@@ -286,3 +286,98 @@ async def list_templates(db: AsyncSession) -> list[dict]:
     )
     result = await db.execute(stmt)
     return [t.to_dict() for t in result.scalars().all()]
+
+
+async def list_all_templates(db: AsyncSession, include_inactive: bool = False) -> list[dict]:
+    """Return all prompt templates (admin view). Optionally include inactive ones."""
+    if include_inactive:
+        stmt = select(PromptTemplate).order_by(PromptTemplate.display_order)
+    else:
+        stmt = (
+            select(PromptTemplate)
+            .where(PromptTemplate.is_active == True)
+            .order_by(PromptTemplate.display_order)
+        )
+    result = await db.execute(stmt)
+    return [t.to_dict() for t in result.scalars().all()]
+
+
+async def get_template_by_id(db: AsyncSession, template_id: str) -> Optional[PromptTemplate]:
+    """Get a single prompt template by ID."""
+    stmt = select(PromptTemplate).where(PromptTemplate.id == uuid.UUID(template_id))
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def create_template(
+    db: AsyncSession,
+    label: str,
+    prompt_text: str,
+    icon: str = "ti-sparkles",
+    display_order: int = 0,
+) -> PromptTemplate:
+    """Create a new prompt template."""
+    template = PromptTemplate(
+        id=uuid.uuid4(),
+        label=label,
+        icon=icon,
+        prompt_text=prompt_text,
+        display_order=display_order,
+        is_active=True,
+    )
+    db.add(template)
+    await db.commit()
+    await db.refresh(template)
+    return template
+
+
+async def update_template(
+    db: AsyncSession,
+    template_id: str,
+    label: str = None,
+    prompt_text: str = None,
+    icon: str = None,
+    display_order: int = None,
+    is_active: bool = None,
+) -> Optional[PromptTemplate]:
+    """Update an existing prompt template."""
+    template = await get_template_by_id(db, template_id)
+    if not template:
+        return None
+
+    if label is not None:
+        template.label = label
+    if prompt_text is not None:
+        template.prompt_text = prompt_text
+    if icon is not None:
+        template.icon = icon
+    if display_order is not None:
+        template.display_order = display_order
+    if is_active is not None:
+        template.is_active = is_active
+
+    await db.commit()
+    await db.refresh(template)
+    return template
+
+
+async def delete_template(db: AsyncSession, template_id: str) -> bool:
+    """Delete a prompt template (soft delete via is_active flag)."""
+    template = await get_template_by_id(db, template_id)
+    if not template:
+        return False
+    
+    template.is_active = False
+    await db.commit()
+    return True
+
+
+async def reorder_templates(db: AsyncSession, reordered_ids: list[str]) -> bool:
+    """Reorder templates based on provided list of IDs."""
+    for order, template_id in enumerate(reordered_ids):
+        template = await get_template_by_id(db, template_id)
+        if template:
+            template.display_order = order
+    
+    await db.commit()
+    return True

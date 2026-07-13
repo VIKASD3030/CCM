@@ -36,19 +36,23 @@ services:
       - MAX_DB_CONNECTIONS=20
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: ccm-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - ccm_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
+  # Redis: disabled for the initial stage. CCM runs background jobs
+  # synchronously in-process when REDIS__URL is not set (see backend/services/job_queue.py).
+  # Uncomment to re-enable the ARQ-backed queue, and add `redis: condition: service_healthy`
+  # back to the `app` service's `depends_on` below.
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: ccm-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - ccm_redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 5
+  #   restart: unless-stopped
 
   minio:
     image: minio/minio
@@ -104,8 +108,8 @@ services:
         condition: service_healthy
       pgbouncer:
         condition: service_started
-      redis:
-        condition: service_healthy
+      # redis:
+      #   condition: service_healthy
       minio:
         condition: service_healthy
       clamav:
@@ -142,7 +146,7 @@ services:
 
 volumes:
   ccm_pgdata:
-  ccm_redis_data:
+  # ccm_redis_data:
   ccm_minio_data:
   ccm_clamav_data:
   prometheus_data:

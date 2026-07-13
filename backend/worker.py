@@ -326,7 +326,10 @@ class WorkerSettings:
     ]
     on_startup = startup
     on_shutdown = shutdown
-    redis_settings = RedisSettings.from_dsn(str(settings.redis.url))
+    # Only needed to run the standalone ARQ worker process (`ccm worker start`).
+    # When Redis isn't configured, jobs run inline instead and this module is
+    # still imported (for its task functions), so this must not raise at import time.
+    redis_settings = RedisSettings.from_dsn(str(settings.redis.url)) if settings.redis.url else None
     job_timeout = 600
     result_ttl = 3600
     max_tries = 3
