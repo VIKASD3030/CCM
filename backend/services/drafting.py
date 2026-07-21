@@ -284,7 +284,7 @@ async def get_drafts_for_letter(
     if not letter:
         return [], 0
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         if letter.created_by != user_id:
             return [], 0
 
@@ -322,7 +322,7 @@ async def get_draft_by_id(
     if not letter:
         return None
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         if letter.created_by != user_id:
             return None
 

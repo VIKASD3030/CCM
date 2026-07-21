@@ -11,6 +11,7 @@ from sqlalchemy import select
 from backend.config import get_settings
 from backend.database import get_db
 from backend.models.user import User
+from backend.models.role_permission import RolePermission
 
 settings = get_settings()
 
@@ -68,3 +69,34 @@ def require_role(*allowed_roles: str):
             )
         return current_user
     return role_checker
+
+
+def require_permission(module_key: str, action: str = "view"):
+    """
+    Dependency factory to require a specific action (view/create/edit/delete)
+    on a module, looked up per-request from the role_permissions table.
+    Unlike require_role(), this makes access admin-configurable at runtime
+    (via the /api/roles endpoints) instead of hardcoded per route.
+    Usage:
+        @app.delete("/webhooks/{id}")
+        async def delete_webhook(user: User = Depends(require_permission("webhooks", "delete"))):
+            ...
+    """
+    async def permission_checker(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        result = await db.execute(
+            select(RolePermission).where(
+                RolePermission.role_name == current_user.role,
+                RolePermission.module_key == module_key,
+            )
+        )
+        perm = result.scalar_one_or_none()
+        if not perm or not getattr(perm, f"can_{action}", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient permissions for {module_key}.{action}",
+            )
+        return current_user
+    return permission_checker

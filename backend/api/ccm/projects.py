@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.deps import get_current_user
 from backend.database import get_db
 from backend.models.project import Project
+from backend.models.master_record import MasterRecord
 from backend.models.sharepoint_sync import SharePointSyncLog
 from backend.models.user import User
 
@@ -21,11 +22,36 @@ async def list_projects(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all active projects."""
+    """List all active projects — merges CCM projects + Master module projects."""
+    # 1. CCM-native projects
     stmt = select(Project).where(Project.status == "active").order_by(Project.created_at.desc())
     result = await db.execute(stmt)
-    projects = result.scalars().all()
-    return {"projects": [p.to_dict() for p in projects]}
+    ccm_projects = [p.to_dict() for p in result.scalars().all()]
+
+    # 2. Master module projects (from master_records, entity="project_master")
+    stmt2 = select(MasterRecord).where(
+        MasterRecord.entity == "project_master",
+        MasterRecord.status != "9",
+    ).order_by(MasterRecord.id)
+    result2 = await db.execute(stmt2)
+    master_rows = result2.scalars().all()
+
+    for row in master_rows:
+        data = row.data or {}
+        ccm_projects.append({
+            "id": f"master-{row.id}",
+            "name": data.get("ProjectName") or data.get("ProjectCode") or f"Project #{row.id}",
+            "project_code": data.get("ProjectCode"),
+            "client_name": data.get("ClientName"),
+            "business_unit": data.get("BusinessUnit"),
+            "business_line": data.get("BusinessLine"),
+            "sharepoint_site_id": None,
+            "status": "active",
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "source": "master",
+        })
+
+    return {"projects": ccm_projects}
 
 
 @router.post("")

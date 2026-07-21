@@ -138,10 +138,17 @@ def create(
 ):
     """Create a new user."""
     async def run_create():
+        from sqlalchemy import select
         from backend.database import async_session_factory
         from backend.models.user import User
-        from backend.api.auth import get_password_hash
+        from backend.models.role import Role
+        from backend.api.ccm.auth import get_password_hash
         async with async_session_factory() as session:
+            role_exists = await session.execute(select(Role).where(Role.name == role))
+            if not role_exists.scalar_one_or_none():
+                typer.echo(f"Error: role '{role}' does not exist.", err=True)
+                raise typer.Exit(code=1)
+
             user = User(
                 email=email,
                 hashed_password=get_password_hash(password),

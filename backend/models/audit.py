@@ -18,7 +18,7 @@ class AuditEntry(Base):
     """An audit log entry tracking actions on letters, drafts, and documents."""
     
     # Note: This model assumes the table will be partitioned.
-    # The actual partitioning will be done via Alembic migrations.
+    # The actual partitioning will be done via raw SQL in a future migration.
     
     __tablename__ = "audit_logs"
 

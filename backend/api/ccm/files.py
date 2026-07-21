@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, require_role
+from backend.api.deps import get_current_user
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.file import FileRecord
@@ -28,7 +28,7 @@ async def download_file(
     """Download a file.
     
     Access control:
-    - Admins and reviewers can download any file
+    - Admins can download any file
     - Drafters can only download files they uploaded
     """
     file_record = await db.get(FileRecord, file_id)
@@ -38,7 +38,7 @@ async def download_file(
     if file_record.deleted_at:
         raise HTTPException(status_code=410, detail="File has been deleted")
 
-    if current_user.role not in ("admin", "reviewer"):
+    if current_user.role != "admin":
         if file_record.uploaded_by != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied")
 

@@ -1,0 +1,26 @@
+/*SIDEBAR BACKGROUND FIX */
+.sidebar,
+.sidebar .sidebar-content,
+.sidebar .sidebar-nav,
+.sidebar .sidebar-nav .nav {
+  background: #3b466f !important;
+}
+
+.sidebar .nav-link {
+  color: #444 !important;
+  background: transparent !important;
+}
+
+.sidebar .nav-link:hover {
+  background: #a9dbe4 !important;
+  color: #3b466f !important;
+}
+
+.sidebar .nav-link.active {
+  background: #3b466f !important;
+  color: #fff !important;
+}
+
+.sidebar .nav-link.active .nav-icon {
+  color: #fff !important;
+}

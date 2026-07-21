@@ -243,7 +243,7 @@ async def get_all_letters(
         base_stmt = base_stmt.where(InboundLetter.project_id == project_id)
         count_stmt = count_stmt.where(InboundLetter.project_id == project_id)
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         base_stmt = base_stmt.where(InboundLetter.created_by == user_id)
         count_stmt = count_stmt.where(InboundLetter.created_by == user_id)
 
@@ -275,7 +275,7 @@ async def get_letter_by_id(
     if not letter:
         return None
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         if letter.created_by != user_id:
             return None
 

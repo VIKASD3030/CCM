@@ -271,7 +271,7 @@ async def search_similar_chunks(
     if project_id:
         stmt = stmt.where(KnowledgeDocument.project_id == project_id)
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         stmt = stmt.where(KnowledgeDocument.uploaded_by == user_id)
 
     if category:
@@ -319,7 +319,7 @@ async def get_all_documents(
         count_stmt = count_stmt.where(KnowledgeDocument.project_id == project_id)
         base_stmt = base_stmt.where(KnowledgeDocument.project_id == project_id)
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         count_stmt = count_stmt.where(KnowledgeDocument.uploaded_by == user_id)
         base_stmt = base_stmt.where(KnowledgeDocument.uploaded_by == user_id)
 
@@ -350,7 +350,7 @@ async def get_document_stats(
         .group_by(KnowledgeDocument.category)
     )
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         doc_count_stmt = doc_count_stmt.where(KnowledgeDocument.uploaded_by == user_id)
         chunk_count_stmt = chunk_count_stmt.join(KnowledgeDocument).where(KnowledgeDocument.uploaded_by == user_id)
         indexed_count_stmt = indexed_count_stmt.where(KnowledgeDocument.uploaded_by == user_id)

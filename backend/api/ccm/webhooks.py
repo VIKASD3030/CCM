@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, require_role
+from backend.api.deps import get_current_user, require_permission
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.webhook import Webhook, WebhookDelivery
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/webhooks", tags=["Webhooks"])
 @router.post("")
 async def create_webhook(
     request: Request,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("webhooks", "create")),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new webhook. Admin only."""
@@ -47,7 +47,7 @@ async def create_webhook(
 
 @router.get("")
 async def list_webhooks(
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("webhooks", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     """List all webhooks. Admin only."""
@@ -60,7 +60,7 @@ async def list_webhooks(
 @router.get("/{webhook_id}")
 async def get_webhook(
     webhook_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("webhooks", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific webhook. Admin only."""
@@ -73,7 +73,7 @@ async def get_webhook(
 @router.delete("/{webhook_id}")
 async def delete_webhook(
     webhook_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("webhooks", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a webhook. Admin only."""
@@ -90,7 +90,7 @@ async def list_webhook_deliveries(
     webhook_id: uuid.UUID,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("webhooks", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     """List deliveries for a webhook. Paginated. Admin only."""
@@ -124,7 +124,7 @@ async def list_webhook_deliveries(
 @router.post("/{webhook_id}/test")
 async def test_webhook(
     webhook_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("webhooks", "edit")),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a test ping event to verify the webhook URL. Admin only."""

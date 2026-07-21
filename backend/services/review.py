@@ -23,31 +23,31 @@ logger = structlog.get_logger()
 settings = get_settings()
 
 
-async def _notify_reviewers(db: AsyncSession, draft: DraftResponse, letter: InboundLetter):
-    """Send review_needed notification to all reviewers who opted in."""
+async def _notify_admins(db: AsyncSession, draft: DraftResponse, letter: InboundLetter):
+    """Send review_needed notification to all admins who opted in."""
     try:
         stmt = (
             select(User)
             .join(EmailNotificationSetting, User.id == EmailNotificationSetting.user_id)
             .where(
-                User.role == "reviewer",
+                User.role == "admin",
                 User.is_active == True,
                 EmailNotificationSetting.on_review_needed == True,
             )
         )
         result = await db.execute(stmt)
-        reviewers = result.scalars().all()
+        admins = result.scalars().all()
 
-        if not reviewers:
+        if not admins:
             return
 
         arq_redis = await get_arq_redis()
-        for reviewer in reviewers:
+        for admin in admins:
             await run_job(
                 arq_redis,
                 "send_email_task",
                 template_name="review_needed.html",
-                recipients=[reviewer.email],
+                recipients=[admin.email],
                 subject=f"Review Needed: {letter.filename}",
                 template_data={
                     "letter_subject": letter.filename,
@@ -57,7 +57,7 @@ async def _notify_reviewers(db: AsyncSession, draft: DraftResponse, letter: Inbo
                 },
             )
     except Exception as e:
-        logger.warning("review.notify_reviewers_failed", error=str(e))
+        logger.warning("review.notify_admins_failed", error=str(e))
 
 
 async def _notify_drafter(
@@ -93,7 +93,7 @@ async def _notify_drafter(
             template_name = "draft_approved.html"
             subject = f"Draft Approved: {letter.filename}"
             template_data.update({
-                "reviewer_name": extra_data.get("reviewer_name", "Reviewer") if extra_data else "Reviewer",
+                "reviewer_name": extra_data.get("reviewer_name", "Admin") if extra_data else "Admin",
                 "approved_at": extra_data.get("approved_at", "") if extra_data else "",
                 "view_url": f"{settings.app_base_url}/drafts/{draft.id}",
             })
@@ -103,7 +103,7 @@ async def _notify_drafter(
             template_name = "draft_rejected.html"
             subject = f"Draft Needs Revision: {letter.filename}"
             template_data.update({
-                "reviewer_name": extra_data.get("reviewer_name", "Reviewer") if extra_data else "Reviewer",
+                "reviewer_name": extra_data.get("reviewer_name", "Admin") if extra_data else "Admin",
                 "rejection_reason": extra_data.get("feedback", "No feedback provided") if extra_data else "No feedback provided",
                 "edit_url": f"{settings.app_base_url}/drafts/{draft.id}/edit",
             })
@@ -148,19 +148,16 @@ async def approve_draft(
     if not letter:
         raise ValueError(f"Letter {draft.letter_id} not found")
 
-    # Update statuses
     draft.status = "approved"
     draft.reviewer_notes = reviewer_notes
     letter.status = "approved"
 
-    # Get reviewer name
-    reviewer_name = "Reviewer"
+    reviewer_name = "Admin"
     if user_id:
         reviewer = await db.get(User, user_id)
         if reviewer:
             reviewer_name = reviewer.email
 
-    # Audit
     audit = AuditEntry(
         entity_type="draft",
         entity_id=str(draft_id),
@@ -174,7 +171,6 @@ async def approve_draft(
     )
     db.add(audit)
 
-    # Feed approved response back into knowledge base (feedback loop)
     try:
         response_content = (
             f"APPROVED RESPONSE TO: {letter.filename}\n"
@@ -198,7 +194,6 @@ async def approve_draft(
 
     await db.flush()
 
-    # Dispatch webhook (fire-and-forget)
     await dispatch_event("draft.approved", {
         "draft_id": str(draft_id),
         "letter_id": str(draft.letter_id),
@@ -206,7 +201,6 @@ async def approve_draft(
         "reviewer_notes": reviewer_notes,
     })
 
-    # Send email notification (fire-and-forget)
     await _notify_drafter(db, draft, letter, "approved", {
         "reviewer_name": reviewer_name,
         "approved_at": str(draft.updated_at),
@@ -241,7 +235,7 @@ async def reject_draft(
     draft.status = "rejected"
     draft.reviewer_notes = feedback
 
-    reviewer_name = "Reviewer"
+    reviewer_name = "Admin"
     if user_id:
         reviewer = await db.get(User, user_id)
         if reviewer:
@@ -250,7 +244,6 @@ async def reject_draft(
     if letter:
         letter.status = "classified"
 
-    # Audit
     audit = AuditEntry(
         entity_type="draft",
         entity_id=str(draft_id),
@@ -265,7 +258,6 @@ async def reject_draft(
     db.add(audit)
     await db.flush()
 
-    # Dispatch webhook (fire-and-forget)
     await dispatch_event("draft.rejected", {
         "draft_id": str(draft_id),
         "letter_id": str(draft.letter_id) if letter else None,
@@ -273,7 +265,6 @@ async def reject_draft(
         "feedback": feedback,
     })
 
-    # Send email notification (fire-and-forget)
     if letter:
         await _notify_drafter(db, draft, letter, "rejected", {
             "reviewer_name": reviewer_name,
@@ -304,7 +295,6 @@ async def mark_as_sent(
     if letter:
         letter.status = "sent"
 
-    # Audit
     audit = AuditEntry(
         entity_type="draft",
         entity_id=str(draft_id),
@@ -337,7 +327,6 @@ async def archive_letter(
 
     letter.status = "archived"
 
-    # Audit
     audit = AuditEntry(
         entity_type="letter",
         entity_id=str(letter_id),
@@ -363,9 +352,6 @@ async def get_audit_trail(
 ) -> list[dict]:
     """Get audit trail entries, optionally filtered with row-level security."""
     stmt = select(AuditEntry).order_by(AuditEntry.created_at.desc())
-
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
-        pass
 
     if entity_type:
         stmt = stmt.where(AuditEntry.entity_type == entity_type)
@@ -412,7 +398,7 @@ async def get_dashboard_stats(
         .limit(10)
     )
 
-    if user_role not in ["admin", "reviewer"] and user_id is not None:
+    if user_role != "admin" and user_id is not None:
         letter_stats_stmt = letter_stats_stmt.where(InboundLetter.created_by == user_id)
         draft_stats_stmt = draft_stats_stmt.where(DraftResponse.letter_id.in_(
             select(InboundLetter.id).where(InboundLetter.created_by == user_id)

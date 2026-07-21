@@ -1,89 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="CCM — AI-powered Correspondence Contract Management Tool for drafting professional responses to client letters.">
-    <title>CCM — Correspondence Contract Management</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
-    <link rel="stylesheet" href="/css/styles.css">
-</head>
-<body>
-    <div id="app" class="app-container">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="./public/img/s_logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Web site created using create-react-app"
+    />
+    <link rel="apple-touch-icon" href="./logo.png" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <link rel="manifest" href="/manifest.json" />
+    <!--
+      Notice the use of  in the tags above.
+      It will be replaced with the URL of the `public` folder during the build.
+      Only files inside the `public` folder can be referenced from the HTML.
 
-        <!-- SIDEBAR -->
-        <aside id="sidebar" class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo">
-                    <div class="logo-icon">
-                        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                            <rect width="28" height="28" rx="7" fill="#534AB7"/>
-                            <text x="14" y="19" text-anchor="middle" fill="white" font-family="Inter" font-size="15" font-weight="500">C</text>
-                        </svg>
-                    </div>
-                    <span class="logo-text">CCM</span>
-                </div>
-            </div>
+      Unlike "/favicon.ico" or "favicon.ico", "/favicon.ico" will
+      work correctly both with client-side routing and a non-root public URL.
+      Learn how to configure a non-root public URL by running `npm run build`.
+    -->
+    <title>CCM</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+<script id="react-dotenv" src="/env.js"></script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
 
-            <nav class="sidebar-nav">
-                <a href="#dashboard" class="nav-item active" data-page="dashboard">
-                    <i class="ti ti-layout-dashboard"></i>
-                    <span>Dashboard</span>
-                </a>
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
 
-                <a href="#drafting" class="nav-item" data-page="drafting">
-                    <i class="ti ti-writing"></i>
-                    <span>AI Drafting</span>
-                </a>
-            </nav>
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
+        <script type="module" src="/src/index.js"></script>
+  </body>
 
-            <div class="sidebar-footer">
-                <div class="system-status">
-                    <i class="ti ti-robot"></i>
-                    <!-- <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;">Knower API</span> -->
-                    <div class="status-dot" id="system-status-dot"></div>
-                    <span id="system-status-text">Connecting…</span>
-                </div>
-            </div>
-        </aside>
-
-        <!-- MAIN CONTENT -->
-        <main id="main-content" class="main-content">
-
-            <!-- Top Bar -->
-            <header class="top-bar">
-                <div class="top-bar-left">
-                    <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Open menu">
-                        <i class="ti ti-menu-2" style="font-size: 20px;"></i>
-                    </button>
-                    <h1 id="page-title" class="page-title">Dashboard</h1>
-                </div>
-                <div class="top-bar-right">
-                    <div id="topbar-actions"></div>
-                    <span class="topbar-date" id="topbar-date"></span>
-                    <div class="user-avatar-chip">AK</div>
-                </div>
-            </header>
-
-            <!-- Page Content -->
-            <div id="page-content" class="page-content">
-            </div>
-        </main>
-    </div>
-
-    <!-- Project Selector Modal -->
-    <div id="modal-overlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this) App.closeModal()">
-        <div id="modal-content" class="modal-content"></div>
-    </div>
-
-    <!-- Toast Container -->
-    <div id="toast-container" class="toast-container"></div>
-
-    <script src="/js/api.js"></script>
-    <script src="/js/drafting.js"></script>
-    <script src="/js/app.js"></script>
-</body>
 </html>

@@ -10,7 +10,6 @@ from backend.config import get_settings
 logger = structlog.get_logger()
 settings = get_settings()
 
-# Engine configuration for PostgreSQL + asyncpg
 engine_kwargs = {
     "echo": settings.debug,
     "pool_size": settings.database.pool_size,
@@ -55,11 +54,12 @@ async def init_db():
     import backend.models  # Ensure models are registered with Base.metadata
     from sqlalchemy import text
     async with engine.begin() as conn:
-        # Create all tables
         await conn.run_sync(Base.metadata.create_all)
         logger.info("db.tables_created")
 
-        # Add storage_path column if missing (added in v1.1)
+        from backend.db_seed import seed_rbac
+        await seed_rbac(conn)
+
         result = await conn.execute(
             text("SELECT column_name FROM information_schema.columns "
                  "WHERE table_name='knowledge_documents' AND column_name='storage_path'")
@@ -69,3 +69,20 @@ async def init_db():
             await conn.execute(text(
                 "ALTER TABLE knowledge_documents ADD COLUMN storage_path VARCHAR(500)"
             ))
+
+        # Add master-data status columns idempotently (create_all does not ALTER)
+        for tbl in ("departments", "locations", "designations", "units", "lookups"):
+            await conn.execute(text(
+                f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS status VARCHAR(10) DEFAULT '1'"
+            ))
+
+        # Run master schema consolidation migration if master tables exist
+        master_tables_exist = await conn.execute(
+            text("SELECT EXISTS (SELECT FROM information_schema.tables "
+                 "WHERE table_name = 'master_project')")
+        )
+        if master_tables_exist.scalar():
+            from backend.migrations import _001_consolidate_master_data as migration_001
+            logger.info("db.running_migration_001")
+            await migration_001.run(conn)
+            logger.info("db.migration_001_complete")

@@ -1,0 +1,158 @@
+.login-page-container {
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  background-image: url('./metro-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-page-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.45) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  width: 420px;
+  padding: 40px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+  border: none !important;
+  border-radius: 16px !important;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+
+}
+
+.login-title {
+  font-size: 3.5rem !important;
+  font-weight: 700 !important;
+  color: #262626 !important;
+  letter-spacing: 4px !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
+.login-logo {
+  max-width: 110px;
+  margin-top: 15px;
+}
+
+.login-subtitle {
+  font-size: 1.1rem !important;
+  color: #555 !important;
+  margin-top: 15px !important;
+  
+  margin-bottom: 80px !important; 
+}
+
+.login-button-group .ant-space-item button {
+  min-width: 120px;
+  height: 44px;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 22px !important; 
+}
+
+.login-button-group .ant-btn-primary {
+  background-color: #ff5b5b !important;
+  border-color: #ff5b5b !important;
+}
+.login-button-group{
+  padding-bottom: 20px;
+}
+
+.login-button-group .ant-btn-primary:hover {
+  background-color: #ff3b3b !important;
+  border-color: #ff3b3b !important;
+}
+
+.login-button-group .ant-btn-default:hover {
+  color: #ff5b5b !important;
+  border-color: #ff5b5b !important;
+}
+
+.login-signup-link {
+  margin-top: 20px;
+  font-size: 0.9rem;
+  color: #ff5b5b;
+  text-decoration: none;
+}
+
+.login-signup-link:hover {
+  text-decoration: underline;
+}
+
+/* Small devices (Mobile) */
+@media only screen and (max-width: 600px) {
+  .login-card {
+    width: 90% !important;
+    padding: 20px !important;
+  }
+  .login-title {
+    font-size: 2rem !important;
+    letter-spacing: 2px !important;
+  }
+  .login-subtitle {
+    font-size: 0.9rem !important;
+    margin-bottom: 40px !important;
+  }
+  .login-button-group .ant-space-item button {
+    min-width: 100px;
+  }
+}
+
+/* Medium devices (Tablets) */
+@media only screen and (min-width: 601px) and (max-width: 1024px) {
+  .login-card {
+    width: 380px !important;
+    padding: 30px !important;
+  }
+  .login-title {
+    font-size: 2.8rem !important;
+  }
+  .login-subtitle {
+    margin-bottom: 60px !important;
+  }
+}
+
+/* Large devices (Laptops) */
+@media only screen and (min-width: 1025px) and (max-width: 1440px) {
+  .login-card {
+    width: 420px !important;
+  }
+}
+
+/* 4K devices (Extra Large) */
+@media only screen and (min-width: 2560px) {
+  .login-card {
+    width: 500px !important;
+    padding: 60px !important;
+  }
+  .login-title {
+    font-size: 4.5rem !important;
+  }
+  .login-subtitle {
+    font-size: 1.4rem !important;
+    margin-bottom: 100px !important;
+  }
+  .login-button-group .ant-space-item button {
+    min-width: 160px;
+    height: 54px;
+    font-size: 1.2rem;
+  }
+}

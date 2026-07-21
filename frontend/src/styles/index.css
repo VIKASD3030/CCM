@@ -1,0 +1,44 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  background-color: #e4e5e6;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+body > iframe {
+  display: none;
+}
+
+/* Responsive adjustments for body */
+/* Small devices (Mobile) */
+@media only screen and (max-width: 600px) {
+  body {
+    font-size: 14px;
+  }
+}
+
+/* Medium devices (Tablets) */
+@media only screen and (min-width: 601px) and (max-width: 1024px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+/* Large devices (Laptops) */
+@media only screen and (min-width: 1025px) and (max-width: 1440px) {
+  body {
+    font-size: 16px;
+  }
+}
+
+/* 4K devices (Extra Large) */
+@media only screen and (min-width: 2560px) {
+  body {
+    font-size: 22px;
+  }
+}

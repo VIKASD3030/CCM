@@ -11,7 +11,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, require_role
+from backend.api.deps import get_current_user, require_permission
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.job import Job
@@ -38,7 +38,7 @@ async def get_job_status(
 @router.delete("/{job_id}")
 async def cancel_queued_job(
     job_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("jobs", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     """Cancel a queued job (only if status is still 'queued'). Admin only."""

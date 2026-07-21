@@ -1,6 +1,5 @@
 """
 Database models package.
-Import all models here so Alembic and Base.metadata.create_all() discover them.
 """
 
 from backend.models.document import KnowledgeDocument, DocumentChunk
@@ -19,6 +18,15 @@ from backend.models.sharepoint_sync import SharePointSyncLog
 from backend.models.drafting_session import DraftingSession
 from backend.models.drafting_message import DraftingMessage
 from backend.models.prompt_template import PromptTemplate
+from backend.models.role import Role
+from backend.models.module import Module
+from backend.models.role_permission import RolePermission
+from backend.models.lookup import Lookup
+from backend.models.department import Department
+from backend.models.location import Location
+from backend.models.designation import Designation
+from backend.models.unit import Unit
+from backend.models.master_record import MasterRecord
 
 __all__ = [
     "KnowledgeDocument",
@@ -39,4 +47,13 @@ __all__ = [
     "DraftingSession",
     "DraftingMessage",
     "PromptTemplate",
+    "Role",
+    "Module",
+    "RolePermission",
+    "Lookup",
+    "Department",
+    "Location",
+    "Designation",
+    "Unit",
+    "MasterRecord",
 ]

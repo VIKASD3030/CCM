@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     enable_metrics: bool = Field(True, description="Enable Prometheus metrics")
     metrics_allowed_cidr: Optional[str] = Field(None, description="CIDR allowed to scrape /api/metrics")
 
+    # Azure AD SSO (per-user auth_provider field, not a global mode)
+    azure_tenant_id: Optional[str] = Field(None, description="Azure AD tenant ID")
+    azure_client_id: Optional[str] = Field(None, description="Azure AD client ID")
+    azure_jwks_url: Optional[str] = Field(None, description="Azure AD JWKS URL override")
+
     # PgBouncer
     use_pgbouncer: bool = Field(True, description="Use PgBouncer")
 

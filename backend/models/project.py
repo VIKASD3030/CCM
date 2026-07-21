@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import String, DateTime
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database import Base
@@ -24,6 +24,9 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # Enterprise-only fields migrated from master schema (nullable, free-form JSONB
+    # to avoid cluttering the core schema with sparse enterprise metadata).
+    project_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     def to_dict(self):
         return {

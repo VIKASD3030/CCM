@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, require_role
+from backend.api.deps import get_current_user, require_permission
 from backend.api.limiter import limiter
 from backend.database import get_db
 from backend.models.user import User
@@ -86,7 +86,7 @@ async def list_documents(
 @router.delete("/documents/{document_id}")
 async def delete_document(
     document_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin", "drafter")),
+    current_user: User = Depends(require_permission("knowledge", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a document and all its chunks. Only admins and drafters can delete."""

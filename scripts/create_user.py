@@ -38,6 +38,7 @@ async def create_user(email: str, password: str, role: str = "admin"):
                 name=email.split("@")[0],
                 hashed_password=hashed,
                 role=role,
+                auth_provider="password",
                 is_active=True,
             )
             session.add(user)

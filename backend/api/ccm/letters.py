@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, require_role
+from backend.api.deps import get_current_user, require_permission
 from backend.database import get_db
 from backend.models.user import User
 from backend.services import letter_intake as letter_service
@@ -29,6 +29,10 @@ async def upload_letter(
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "txt"
     content = await file.read()
+
+    # Master-module project IDs (e.g. "master-3") aren't real UUIDs — drop them
+    if project_id and project_id.startswith("master-"):
+        project_id = None
 
     try:
         letter = await letter_service.intake_letter(db, file.filename, content, ext, current_user.id, project_id=project_id)
@@ -89,10 +93,10 @@ async def reclassify_letter(
     letter_id: uuid.UUID,
     category: str = Form(None),
     urgency: str = Form(None),
-    current_user: User = Depends(require_role("admin", "reviewer")),
+    current_user: User = Depends(require_permission("letters", "edit")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Manually override a letter's classification. Only admins and reviewers can reclassify."""
+    """Manually override a letter's classification. Only admins can reclassify."""
     letter = await letter_service.reclassify_letter(db, str(letter_id), category, urgency)
     if not letter:
         raise HTTPException(status_code=404, detail="Letter not found")
@@ -102,7 +106,7 @@ async def reclassify_letter(
 @router.post("/{letter_id}/classify", status_code=202)
 async def classify_letter_endpoint(
     letter_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin", "reviewer")),
+    current_user: User = Depends(require_permission("letters", "edit")),
     db: AsyncSession = Depends(get_db),
 ):
     """Enqueue letter classification as a background job. Returns HTTP 202."""

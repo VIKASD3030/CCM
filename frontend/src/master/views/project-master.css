@@ -1,0 +1,257 @@
+/* ============================================================
+   CCM Project Details — page redesign (UI only)
+   Scoped under .pm-page so it never leaks into other views.
+   Palette: primary #2F3A67, accent #D62828, bg #F6F7FB,
+   border #E5E7EB, text #1F2937, muted #6B7280.
+   ============================================================ */
+
+.pm-page {
+  --pm-primary: #2f3a67;
+  --pm-accent: #d62828;
+  --pm-bg: #f6f7fb;
+  --pm-card: #ffffff;
+  --pm-border: #e5e7eb;
+  --pm-text: #1f2937;
+  --pm-muted: #6b7280;
+  --pm-hover: #f1f5fb;
+
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+  padding: 24px 32px 32px;
+  background: var(--pm-bg);
+}
+
+.pm-page *,
+.pm-page *::before,
+.pm-page *::after {
+  box-sizing: border-box;
+}
+
+/* ---------------- Page header ---------------- */
+.pm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.pm-header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pm-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--pm-text);
+  letter-spacing: -0.02em;
+}
+
+.pm-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pm-muted);
+  font-weight: 400;
+}
+
+/* Primary "New Project" button */
+.pm-new-btn.ant-btn {
+  height: 40px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px !important;
+  background: var(--pm-primary) !important;
+  border: 1px solid var(--pm-primary) !important;
+  color: #ffffff !important;
+  font-size: 14px;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 6px rgba(47, 58, 103, 0.25) !important;
+  transition: background 0.2s ease, transform 0.05s ease;
+}
+
+.pm-new-btn.ant-btn:hover,
+.pm-new-btn.ant-btn:focus {
+  background: #26305a !important;
+  border-color: #26305a !important;
+  color: #ffffff !important;
+}
+
+.pm-new-btn.ant-btn:active {
+  transform: translateY(1px);
+}
+
+.pm-new-btn .anticon {
+  font-size: 15px;
+}
+
+/* ---------------- Table card ---------------- */
+.pm-card {
+  background: var(--pm-card);
+  border: 1px solid var(--pm-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  width: 85%;
+}
+
+.pm-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--pm-border);
+}
+
+.pm-card-head-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--pm-text);
+}
+
+.pm-count-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(47, 58, 103, 0.08);
+  color: var(--pm-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pm-table-wrap {
+  padding: 8px;
+}
+
+/* ---- Ant Table restyle (scoped) ---- */
+.pm-page .ant-table {
+  font-size: 14px;
+  color: var(--pm-text);
+  background: transparent;
+}
+
+.pm-page .ant-table-thead > tr > th {
+  background: #f3f5fa !important;
+  color: var(--pm-primary) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  text-transform: none;
+  border-bottom: 1px solid var(--pm-border) !important;
+  padding: 12px 12px !important;
+  vertical-align: middle !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Remove antd's vertical divider between headers for a softer look */
+.pm-page .ant-table-thead > tr > th::before {
+  display: none !important;
+}
+
+.pm-page .ant-table-tbody > tr > td {
+  padding: 14px 12px !important;
+  height: 52px;
+  border-bottom: 1px solid #f0f1f5 !important;
+  color: var(--pm-text);
+  vertical-align: middle !important;
+  font-size: 14px !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Zebra striping + hover */
+.pm-page .ant-table-tbody > tr:nth-child(even) > td {
+  background: #fbfcfe;
+}
+
+.pm-page .ant-table-tbody > tr:hover > td,
+.pm-page .ant-table-tbody > tr.ant-table-row-hover > td {
+  background: var(--pm-hover) !important;
+}
+
+/* Sticky header stays put while the body scrolls */
+.pm-page .ant-table-sticky-holder {
+  z-index: 2;
+}
+
+/* Numeric + action column helpers (classes set on the columns) */
+.pm-page .ant-table-cell.col-numeric,
+.pm-page .ant-table-thead > tr > th.col-numeric {
+  text-align: right !important;
+}
+
+.pm-page .ant-table-cell.col-center,
+.pm-page .ant-table-thead > tr > th.col-center {
+  text-align: center !important;
+}
+
+/* Pagination spacing */
+.pm-page .ant-pagination {
+  margin: 16px 8px 8px !important;
+}
+
+/* ---------------- Empty state ---------------- */
+.pm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 56px 24px;
+  text-align: center;
+}
+
+.pm-empty-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(47, 58, 103, 0.06);
+  color: var(--pm-primary);
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.pm-empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--pm-text);
+}
+
+.pm-empty-text {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--pm-muted);
+  max-width: 320px;
+}
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 1440px) {
+  .pm-page { padding: 24px; }
+}
+
+@media (max-width: 1200px) {
+  .pm-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pm-new-btn.ant-btn { align-self: flex-start; }
+}

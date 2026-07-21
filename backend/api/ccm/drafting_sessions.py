@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, require_role
+from backend.api.deps import get_current_user, require_permission
 from backend.database import get_db
 from backend.models.user import User
 from backend.services import drafting_sessions as svc
@@ -177,10 +177,10 @@ async def add_message(
 prompts_router = APIRouter(prefix="/api/prompts", tags=["Prompts (Admin)"])
 
 
-@prompts_router.get("", dependencies=[Depends(require_role("admin"))])
+@prompts_router.get("", dependencies=[Depends(require_permission("prompts", "view"))])
 async def list_all_templates(
     include_inactive: bool = Query(False),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("prompts", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     """List all prompt templates (admin only). Include inactive if requested."""
@@ -188,13 +188,13 @@ async def list_all_templates(
     return {"templates": templates}
 
 
-@prompts_router.post("", status_code=201, dependencies=[Depends(require_role("admin"))])
+@prompts_router.post("", status_code=201, dependencies=[Depends(require_permission("prompts", "create"))])
 async def create_template(
     label: str = Form(...),
     prompt_text: str = Form(...),
     icon: str = Form("ti-sparkles"),
     display_order: int = Form(0),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("prompts", "create")),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new prompt template (admin only)."""
@@ -208,10 +208,10 @@ async def create_template(
     return {"template": template.to_dict()}
 
 
-@prompts_router.get("/{template_id}", dependencies=[Depends(require_role("admin"))])
+@prompts_router.get("/{template_id}", dependencies=[Depends(require_permission("prompts", "view"))])
 async def get_template(
     template_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("prompts", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single prompt template (admin only)."""
@@ -221,7 +221,7 @@ async def get_template(
     return {"template": template.to_dict()}
 
 
-@prompts_router.put("/{template_id}", dependencies=[Depends(require_role("admin"))])
+@prompts_router.put("/{template_id}", dependencies=[Depends(require_permission("prompts", "edit"))])
 async def update_template(
     template_id: uuid.UUID,
     label: str = Form(None),
@@ -229,7 +229,7 @@ async def update_template(
     icon: str = Form(None),
     display_order: int = Form(None),
     is_active: bool = Form(None),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("prompts", "edit")),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a prompt template (admin only)."""
@@ -247,10 +247,10 @@ async def update_template(
     return {"template": template.to_dict()}
 
 
-@prompts_router.delete("/{template_id}", status_code=204, dependencies=[Depends(require_role("admin"))])
+@prompts_router.delete("/{template_id}", status_code=204, dependencies=[Depends(require_permission("prompts", "delete"))])
 async def delete_template(
     template_id: uuid.UUID,
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("prompts", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a prompt template (soft delete, admin only)."""
@@ -259,10 +259,10 @@ async def delete_template(
         raise HTTPException(status_code=404, detail="Template not found")
 
 
-@prompts_router.post("/reorder", dependencies=[Depends(require_role("admin"))])
+@prompts_router.post("/reorder", dependencies=[Depends(require_permission("prompts", "edit"))])
 async def reorder_templates(
     template_ids: list[str] = Form(...),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_permission("prompts", "edit")),
     db: AsyncSession = Depends(get_db),
 ):
     """Reorder prompt templates (admin only)."""
