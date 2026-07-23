@@ -1,21 +1,35 @@
-// SYSTRA / CCM brand palette — single source of truth for colors.
-// Mirrors the design tokens defined in the redesigned Project Master page.
+// Enterprise CCM palette — single source of truth for colors.
+// Inspired by Azure Portal, Linear, and Material Design 3.
 
 export const tokens = {
-  primary: '#2F3A67',
-  primaryDark: '#26305A',
-  primaryLight: '#3B466F',
-  secondary: '#D62828',
-  secondaryDark: '#B71F1F',
-  background: '#F6F7FB',
+  primary: '#1E3A8A',
+  primaryDark: '#172554',
+  primaryLight: '#2563EB',
+  accent: '#2563EB',
+  accentLight: '#3B82F6',
+  secondary: '#6B7280',
+  background: '#F8FAFC',
   paper: '#FFFFFF',
   border: '#E5E7EB',
-  textPrimary: '#1F2937',
+  borderLight: '#F3F4F6',
+  textPrimary: '#111827',
   textSecondary: '#6B7280',
-  hover: '#F1F5FB',
-  success: '#2E7D32',
-  warning: '#ED6C02',
-  info: '#0288D1',
+  textTertiary: '#9CA3AF',
+  hover: '#F1F5F9',
+  hoverLight: '#F8FAFC',
+  selected: '#EFF6FF',
+  success: '#22C55E',
+  successLight: '#F0FDF4',
+  warning: '#F59E0B',
+  warningLight: '#FFFBEB',
+  error: '#EF4444',
+  errorLight: '#FEF2F2',
+  info: '#3B82F6',
+  infoLight: '#EFF6FF',
+  white: '#FFFFFF',
+  black: '#111827',
+  divider: '#E5E7EB',
+  shadow: 'rgba(0,0,0,0.08)',
 };
 
 const palette = {
@@ -28,16 +42,34 @@ const palette = {
   },
   secondary: {
     main: tokens.secondary,
-    dark: tokens.secondaryDark,
+    dark: '#4B5563',
+    light: '#9CA3AF',
     contrastText: '#FFFFFF',
   },
   error: {
-    main: tokens.secondary,
-    dark: tokens.secondaryDark,
+    main: tokens.error,
+    dark: '#DC2626',
+    light: '#FCA5A5',
+    contrastText: '#FFFFFF',
   },
-  success: { main: tokens.success },
-  warning: { main: tokens.warning },
-  info: { main: tokens.info },
+  success: {
+    main: tokens.success,
+    dark: '#16A34A',
+    light: '#86EFAC',
+    contrastText: '#FFFFFF',
+  },
+  warning: {
+    main: tokens.warning,
+    dark: '#D97706',
+    light: '#FCD34D',
+    contrastText: '#FFFFFF',
+  },
+  info: {
+    main: tokens.info,
+    dark: '#2563EB',
+    light: '#93C5FD',
+    contrastText: '#FFFFFF',
+  },
   background: {
     default: tokens.background,
     paper: tokens.paper,
@@ -45,11 +77,14 @@ const palette = {
   text: {
     primary: tokens.textPrimary,
     secondary: tokens.textSecondary,
+    disabled: tokens.textTertiary,
   },
-  divider: tokens.border,
+  divider: tokens.divider,
   action: {
     hover: tokens.hover,
-    selected: tokens.hover,
+    selected: tokens.selected,
+    disabledBackground: '#F3F4F6',
+    focus: tokens.selected,
   },
 };
 

@@ -1,28 +1,59 @@
 /**
- * Dashboard — React port of the original vanilla CCM dashboard (frontend/js/app.js).
- * Same data sources: review dashboard stats, knowledge stats, letters, project sync.
+ * Dashboard — Enterprise redesign using MUI + our design system tokens.
  */
 import React from 'react';
+import { motion } from 'framer-motion';
+import {
+  Card, CardContent, Box, Stack, Typography, Select, MenuItem, Button, Chip, Skeleton,
+} from '@mui/material';
+import {
+  Inbox as InboxIcon,
+  Edit as EditIcon,
+  Schedule as ScheduleIcon,
+  MenuBook as MenuBookIcon,
+  MailOutlined as MailIcon,
+  CheckCircle as CheckIcon,
+  Send as SendIcon,
+  FolderOpen as FolderIcon,
+  ArrowForward as ArrowIcon,
+  Sync as SyncIcon,
+} from '@mui/icons-material';
 import CCM from '../ccm-api';
-import '../ccm.css';
+import PageContainer from '../../components/ui/PageContainer';
+import PageHeader from '../../components/ui/PageHeader';
+import AppBreadcrumbs from '../../components/ui/Breadcrumbs';
 
-const iconMetrics = [
-  { key: 'total', icon: 'ti-inbox', color: '#534AB7', bg: '#EEEDFE', label: 'Total Letters' },
-  { key: 'drafts', icon: 'ti-writing', color: '#3B82F6', bg: '#E6F1FB', label: 'Drafts Generated' },
-  { key: 'pending', icon: 'ti-clock-hour-4', color: '#633806', bg: '#FAEEDA', label: 'Pending Review' },
-  { key: 'kb', icon: 'ti-book-2', color: '#27500A', bg: '#EAF3DE', label: 'KB Documents' },
-];
-
-const statusMap = {
-  received: 'received', classified: 'classified', drafted: 'drafted',
-  approved: 'approved', sent: 'sent', rejected: 'rejected', pending_review: 'pending',
+const metricIcons = {
+  total: InboxIcon,
+  drafts: EditIcon,
+  pending: ScheduleIcon,
+  kb: MenuBookIcon,
 };
 
-const activityIconMap = {
-  uploaded: { icon: 'ti-upload', color: '#3B82F6', bg: '#E6F1FB' },
-  draft: { icon: 'ti-writing', color: '#534AB7', bg: '#EEEDFE' },
-  approved: { icon: 'ti-check', color: '#27500A', bg: '#EAF3DE' },
-  received: { icon: 'ti-mail', color: '#633806', bg: '#FAEEDA' },
+const metricColors = {
+  total: { color: '#1E3A8A', bg: '#EFF6FF' },
+  drafts: { color: '#7C3AED', bg: '#F5F3FF' },
+  pending: { color: '#D97706', bg: '#FFFBEB' },
+  kb: { color: '#059669', bg: '#ECFDF5' },
+};
+
+const metricLabels = {
+  total: 'Total Letters',
+  drafts: 'Drafts Generated',
+  pending: 'Pending Review',
+  kb: 'KB Documents',
+};
+
+const pipelineColors = ['#1E3A8A', '#2563EB', '#7C3AED', '#059669', '#0EA5E9'];
+
+const statusColors = {
+  received: '#3B82F6',
+  classified: '#8B5CF6',
+  drafted: '#7C3AED',
+  approved: '#22C55E',
+  sent: '#0EA5E9',
+  rejected: '#EF4444',
+  pending: '#F59E0B',
 };
 
 class Dashboard extends React.Component {
@@ -125,164 +156,203 @@ class Dashboard extends React.Component {
 
     if (error) {
       return (
-        <div className="ccm-scope">
-          <div className="empty-state" style={{ padding: 48 }}>
-            <div className="empty-state-icon"><i className="ti ti-alert-circle" /></div>
-            <div className="empty-state-title">Failed to load dashboard</div>
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={this.loadAll}>Retry</button>
-          </div>
-        </div>
+        <PageContainer>
+          <Card sx={{ textAlign: 'center', py: 8 }}>
+            <CardContent>
+              <Typography variant="h5" sx={{ color: '#111827', fontWeight: 700, mb: 1 }}>Failed to load dashboard</Typography>
+              <Button variant="contained" sx={{ mt: 2, borderRadius: 2, textTransform: 'none' }} onClick={this.loadAll}>Retry</Button>
+            </CardContent>
+          </Card>
+        </PageContainer>
       );
     }
 
-    return (
-      <div className="ccm-scope ccm-dashboard">
-        <div className="dash-toolbar">
-          <div className="project-selector">
-            <i className="ti ti-folder" />
-            <select className="filter-select" value={currentProjectId} onChange={this.setProject}>
-              <option value="">All Projects</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-        </div>
+    const maxPipeline = Math.max(...pipeline.map(s => s.count), 1);
 
-        {/* Metrics */}
-        <div className="stat-row">
-          {iconMetrics.map(m => (
-            <div className="stat-card" key={m.key}>
-              <div className="stat-icon" style={{ background: m.bg, color: m.color }}>
-                <i className={`ti ${m.icon}`} />
-              </div>
-              <div className="stat-body">
-                <div className="stat-label">{m.label}</div>
-                <div className="stat-value">{loading ? '…' : metrics[m.key]}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+    return (
+      <PageContainer>
+        <AppBreadcrumbs />
+        <PageHeader
+          title="Dashboard"
+          subtitle="Overview of your CCM system activity"
+          actions={
+            <Select
+              size="small"
+              value={currentProjectId}
+              onChange={this.setProject}
+              sx={{ minWidth: 200, borderRadius: 2, fontSize: 14, bgcolor: '#fff' }}
+            >
+              <MenuItem value="">All Projects</MenuItem>
+              {projects.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
+            </Select>
+          }
+        />
+
+        {/* Metric cards */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
+          {['total', 'drafts', 'pending', 'kb'].map((key) => {
+            const Icon = metricIcons[key];
+            const { color, bg } = metricColors[key];
+            return (
+              <motion.div key={key} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <Card sx={{ position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${color}, ${color}88)`, borderRadius: '16px 16px 0 0' } }}>
+                  <CardContent sx={{ p: 2.5 }}>
+                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
+                      <Box>
+                        <Typography variant="overline" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: 12, letterSpacing: '0.08em' }}>{metricLabels[key]}</Typography>
+                        <Typography variant="h2" sx={{ mt: 0.5, fontSize: 32, fontWeight: 700, color: '#111827' }}>
+                          {loading ? <Skeleton width={60} /> : metrics[key]}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ width: 48, height: 48, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: bg, color, flexShrink: 0 }}>
+                        <Icon sx={{ fontSize: 24 }} />
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </Box>
 
         {/* Pipeline */}
-        <div className="pipeline-card">
-          <div className="card-header" style={{ marginBottom: 0, borderBottom: 'none' }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Pipeline</span>
-          </div>
-          <div className="pipeline-strip">
+        <Card sx={{ mb: 3 }}>
+          <CardContent sx={{ p: 2.5 }}>
+            <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16, mb: 2 }}>Pipeline</Typography>
             {loading ? (
-              <div className="skeleton" style={{ flex: 1, height: 52, borderRadius: 8 }} />
-            ) : pipeline.map(s => (
-              <div className="pipeline-segment" key={s.label}>
-                <div className="pipeline-seg-count">{s.count}</div>
-                <div className="pipeline-seg-label">{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+              <Skeleton variant="rounded" height={56} />
+            ) : (
+              <Box sx={{ display: 'flex', gap: 0 }}>
+                {pipeline.map((s, i) => (
+                  <Box key={s.label} sx={{ flex: 1, textAlign: 'center', position: 'relative' }}>
+                    <Box sx={{ height: Math.max((s.count / maxPipeline) * 52, 4), bgcolor: pipelineColors[i], borderRadius: 1, mx: 0.5, transition: 'height 0.3s ease' }} />
+                    <Typography sx={{ fontSize: 20, fontWeight: 700, color: '#111827', mt: 1 }}>{s.count}</Typography>
+                    <Typography sx={{ fontSize: 12, color: '#9CA3AF', fontWeight: 500 }}>{s.label}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Grid */}
-        <div className="dash-grid">
-          {/* Recent letters */}
-          <div className="card">
-            <div className="card-header">
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Recent letters</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => { window.location.hash = '/master/ai-drafting'; }}>
-                <i className="ti ti-writing" /> Draft
-              </button>
-            </div>
-            <div>
-              {loading ? (
-                <div className="loading-overlay"><div className="spinner" /><span>Loading…</span></div>
-              ) : !letters.length ? (
-                <div className="empty-state" style={{ padding: 24 }}>
-                  <div className="empty-state-icon"><i className="ti ti-mail-off" /></div>
-                  <div className="empty-state-title">No letters yet</div>
-                </div>
-              ) : letters.map(l => (
-                <div key={l.id} className="dash-letter-row">
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{l.sender || 'Unknown'}</div>
-                    <div className="truncate text-muted" style={{ maxWidth: 200, fontSize: 12 }}>{l.filename || '—'}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{this.fmtDate(l.received_at)}</div>
-                  </div>
-                  <span className={`status-pill ${statusMap[l.status] || 'received'}`}>{(l.status || '').replace('_', ' ')}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* Grid: Letters / Sync / Activity */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr 1fr' }, gap: 2.5 }}>
+          {/* Recent Letters */}
+          <Card>
+            <CardContent sx={{ p: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 2, borderBottom: '1px solid #F3F4F6' }}>
+                <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16 }}>Recent Letters</Typography>
+                <Button size="small" startIcon={<EditIcon sx={{ fontSize: 14 }} />} onClick={() => { window.location.hash = '/master/ai-drafting'; }} sx={{ textTransform: 'none', fontSize: 12, color: '#2563EB', fontWeight: 600 }}>
+                  Draft
+                </Button>
+              </Box>
+              <Box sx={{ p: 0 }}>
+                {loading ? (
+                  <Stack spacing={0} p={2.5}>
+                    {[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={52} />)}
+                  </Stack>
+                ) : !letters.length ? (
+                  <Box sx={{ py: 5, textAlign: 'center' }}>
+                    <MailIcon sx={{ fontSize: 36, color: '#D1D5DB', mb: 1 }} />
+                    <Typography sx={{ fontSize: 14, color: '#9CA3AF' }}>No letters yet</Typography>
+                  </Box>
+                ) : letters.map(l => (
+                  <Box key={l.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 1.5, borderBottom: '1px solid #F3F4F6', '&:last-child': { borderBottom: 'none' }, '&:hover': { bgcolor: '#F8FAFC' } }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{l.sender || 'Unknown'}</Typography>
+                      <Typography sx={{ fontSize: 13, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.filename || '—'}</Typography>
+                      <Typography sx={{ fontSize: 12, color: '#9CA3AF', mt: 0.25 }}>{this.fmtDate(l.received_at)}</Typography>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={(l.status || '').replace('_', ' ')}
+                      sx={{ height: 26, fontSize: 12, fontWeight: 600, borderRadius: '999px', bgcolor: `${statusColors[l.status] || '#3B82F6'}14`, color: statusColors[l.status] || '#3B82F6', border: `1px solid ${statusColors[l.status] || '#3B82F6'}30` }}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            </CardContent>
+          </Card>
 
-          {/* Sync status */}
-          <div className="card">
-            <div className="card-header">
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Sync Status</span>
-            </div>
-            <div>
-              {loading ? (
-                <div className="loading-overlay"><div className="spinner" /></div>
-              ) : !sync.length ? (
-                <div className="empty-state" style={{ padding: 16 }}><div className="empty-state-body">No projects configured</div></div>
-              ) : sync.map(({ project, stats }) => {
-                const lastSync = stats?.last_sync;
-                const statusClass = lastSync?.status === 'success' ? 'connected' : (lastSync?.status === 'failed' ? 'error' : '');
-                return (
-                  <div key={project.id} className="dash-sync-row">
-                    <div className={`status-dot ${statusClass}`} style={{ width: 8, height: 8 }} />
-                    <div style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{project.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                      {lastSync?.last_synced_at ? new Date(lastSync.last_synced_at).toLocaleString() : 'Never synced'}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                      {lastSync?.files_synced !== undefined ? `${lastSync.files_synced} files` : ''}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Sync Status */}
+          <Card>
+            <CardContent sx={{ p: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 2, borderBottom: '1px solid #F3F4F6' }}>
+                <SyncIcon sx={{ fontSize: 18, color: '#6B7280' }} />
+                <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16 }}>Sync Status</Typography>
+              </Box>
+              <Box sx={{ p: 0 }}>
+                {loading ? (
+                  <Stack spacing={0} p={2.5}>
+                    {[1, 2].map(i => <Skeleton key={i} variant="rounded" height={52} />)}
+                  </Stack>
+                ) : !sync.length ? (
+                  <Box sx={{ py: 5, textAlign: 'center' }}>
+                    <FolderIcon sx={{ fontSize: 36, color: '#D1D5DB', mb: 1 }} />
+                    <Typography sx={{ fontSize: 14, color: '#9CA3AF' }}>No projects configured</Typography>
+                  </Box>
+                ) : sync.map(({ project, stats }) => {
+                  const lastSync = stats?.last_sync;
+                  const ok = lastSync?.status === 'success';
+                  const fail = lastSync?.status === 'failed';
+                  return (
+                    <Box key={project.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, py: 1.5, borderBottom: '1px solid #F3F4F6', '&:last-child': { borderBottom: 'none' } }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: ok ? '#22C55E' : fail ? '#EF4444' : '#9CA3AF', flexShrink: 0 }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{project.name}</Typography>
+                        <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
+                          {lastSync?.last_synced_at ? new Date(lastSync.last_synced_at).toLocaleDateString() : 'Never synced'}
+                          {lastSync?.files_synced !== undefined ? ` · ${lastSync.files_synced} files` : ''}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </CardContent>
+          </Card>
 
-          {/* Recent activity */}
-          <div className="card">
-            <div className="card-header">
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Recent activity</span>
-            </div>
-            <div>
-              {loading ? (
-                <div className="loading-overlay"><div className="spinner" /></div>
-              ) : !activity.length ? (
-                <div className="empty-state" style={{ padding: 16 }}>
-                  <div className="empty-state-icon"><i className="ti ti-activity" /></div>
-                  <div className="empty-state-body">No activity yet</div>
-                </div>
-              ) : (
-                <div className="timeline">
-                  {activity.map((a, i) => {
-                    let style = activityIconMap.received;
-                    for (const [k, v] of Object.entries(activityIconMap)) { if (a.action.includes(k)) { style = v; break; } }
-                    const time = a.timestamp ? new Date(a.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-                    return (
-                      <div className="timeline-entry" key={i}>
-                        <div className="timeline-dot" style={{ background: style.bg, color: style.color }}>
-                          <i className={`ti ${style.icon}`} style={{ fontSize: 13 }} />
-                        </div>
-                        <div className="timeline-body">
-                          <div className="timeline-action">{a.action.replace(/_/g, ' ')}</div>
-                          <div className="timeline-meta">{a.entity_type || ''} · {time}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick actions */}
-        <div className="card quick-actions" style={{ marginTop: 12 }}>
-          <button className="btn btn-secondary" onClick={() => { window.location.hash = '/master/ai-drafting'; }}>
-            <i className="ti ti-writing" /> AI Drafting
-          </button>
-        </div>
-      </div>
+          {/* Recent Activity */}
+          <Card>
+            <CardContent sx={{ p: 0 }}>
+              <Box sx={{ px: 2.5, py: 2, borderBottom: '1px solid #F3F4F6' }}>
+                <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16 }}>Recent Activity</Typography>
+              </Box>
+              <Box sx={{ p: 0 }}>
+                {loading ? (
+                  <Stack spacing={0} p={2.5}>
+                    {[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={48} />)}
+                  </Stack>
+                ) : !activity.length ? (
+                  <Box sx={{ py: 5, textAlign: 'center' }}>
+                    <ScheduleIcon sx={{ fontSize: 36, color: '#D1D5DB', mb: 1 }} />
+                    <Typography sx={{ fontSize: 14, color: '#9CA3AF' }}>No activity yet</Typography>
+                  </Box>
+                ) : activity.map((a, i) => {
+                  const time = a.timestamp ? new Date(a.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                  let dotColor = '#3B82F6';
+                  if (a.action.includes('draft')) dotColor = '#7C3AED';
+                  if (a.action.includes('approved')) dotColor = '#22C55E';
+                  if (a.action.includes('received')) dotColor = '#F59E0B';
+                  return (
+                    <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, px: 2.5, py: 1.5, borderBottom: '1px solid #F3F4F6', '&:last-child': { borderBottom: 'none' } }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor, mt: 0.75, flexShrink: 0 }} />
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography sx={{ fontSize: 14, fontWeight: 500, color: '#111827', textTransform: 'capitalize' }}>
+                          {a.action.replace(/_/g, ' ')}
+                        </Typography>
+                        <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
+                          {a.entity_type || ''} · {time}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
+      </PageContainer>
     );
   }
 }

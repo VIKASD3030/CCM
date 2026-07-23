@@ -1,5 +1,23 @@
 export default {
   items: [
+    // CCM module
+    {
+      name: 'CCM',
+      url: '/master',
+      icon: 'icon-speedometer',
+      children: [
+        {
+          name: 'Dashboard',
+          url: '/master/dashboard',
+          icon: 'icon-drop',
+        },
+        {
+          name: 'AI Drafting',
+          url: '/master/ai-drafting',
+          icon: 'icon-drop',
+        },
+      ],
+    },
     //master module
     {
       name: 'MASTER',
@@ -16,55 +34,55 @@ export default {
           url: '/master/view-project-master',
           icon: 'icon-drop'
         },                
-        {
-          name: 'Contractor',
-          url: '/master/contractor-master',
-          icon: 'icon-drop',
-        },      
-        { name: 'View Contractor',
-          url: '/master/view-contractor-master',
-          icon: 'icon-drop' 
-        },             
+        // {
+        //   name: 'Contractor',
+        //   url: '/master/contractor-master',
+        //   icon: 'icon-drop',
+        // },      
+        // { name: 'View Contractor',
+        //   url: '/master/view-contractor-master',
+        //   icon: 'icon-drop' 
+        // },             
 
-        {
-          name: 'Contract',
-          url: '/master/contract-master',
-          icon: 'icon-drop',
-        },
-        { name: 'View Contract',
-          url: '/master/view-contract-master', 
-          icon: 'icon-drop' 
-        },
-        {
-          name: 'Activity Group',
-          url: '/master/activity-group-master',
-          icon: 'icon-drop',
-        },
-        {
-          name: 'View Activity Group',
-          url: '/master/view-activity-group-master',
-          icon: 'icon-drop'
-        },
-        {
-          name: 'Activity',
-          url: '/master/activity-master',
-          icon: 'icon-drop',
-        },
-        {
-          name: 'View Activity',
-          url: '/master/view-activity-master',
-          icon: 'icon-drop'
-         },
-        {
-          name: 'Reference Document',
-          url: '/master/reference-document-master',
-          icon: 'icon-drop',
-        },
-        {
-          name: 'View Reference Document',
-          url: '/master/view-reference-document-master',
-          icon: 'icon-drop'
-        },
+        // {
+        //   name: 'Contract',
+        //   url: '/master/contract-master',
+        //   icon: 'icon-drop',
+        // },
+        // { name: 'View Contract',
+        //   url: '/master/view-contract-master', 
+        //   icon: 'icon-drop' 
+        // },
+        // {
+        //   name: 'Activity Group',
+        //   url: '/master/activity-group-master',
+        //   icon: 'icon-drop',
+        // },
+        // {
+        //   name: 'View Activity Group',
+        //   url: '/master/view-activity-group-master',
+        //   icon: 'icon-drop'
+        // },
+        // {
+        //   name: 'Activity',
+        //   url: '/master/activity-master',
+        //   icon: 'icon-drop',
+        // },
+        // {
+        //   name: 'View Activity',
+        //   url: '/master/view-activity-master',
+        //   icon: 'icon-drop'
+        //  },
+        // {
+        //   name: 'Reference Document',
+        //   url: '/master/reference-document-master',
+        //   icon: 'icon-drop',
+        // },
+        // {
+        //   name: 'View Reference Document',
+        //   url: '/master/view-reference-document-master',
+        //   icon: 'icon-drop'
+        // },
         {
           name: 'Department',
           url: '/master/department-master',
@@ -73,23 +91,23 @@ export default {
         { name: 'View Department',
           url: '/master/view-department-master',
           icon: 'icon-drop' },        
-        {
-          name: 'Location',
-          url: '/master/location-master',
-          icon: 'icon-drop',
-        },
-        { name: 'View Location',
-          url: '/master/view-location-master',
-          icon: 'icon-drop' },
+        // {
+        //   name: 'Location',
+        //   url: '/master/location-master',
+        //   icon: 'icon-drop',
+        // },
+        // { name: 'View Location',
+        //   url: '/master/view-location-master',
+        //   icon: 'icon-drop' },
         //=======UNIT=========
-        {
-          name: 'Unit',
-          url: '/master/unit-master',
-          icon: 'icon-drop'
-        },
-        { name: 'View Unit',
-          url: '/master/view-unit-master',
-          icon: 'icon-drop' },
+        // {
+        //   name: 'Unit',
+        //   url: '/master/unit-master',
+        //   icon: 'icon-drop'
+        // },
+        // { name: 'View Unit',
+        //   url: '/master/view-unit-master',
+        //   icon: 'icon-drop' },
         //=======DESIGNATION=========
         {
           name: 'Designation',
@@ -116,21 +134,21 @@ export default {
           url: '/master/view-module-master',
           icon: 'icon-drop' 
         },
-        {
-          name: 'Lookup',
-          url: '/master/lookup-master',
-          icon: 'icon-drop'
-        },
-        {
-          name: 'Auto Notification',
-          url: '/master/autonotification-master',
-          icon: 'icon-drop'
-        },
-        {
-          name: 'View Auto Notification',
-          url: '/master/view-autonotification-master',
-          icon: 'icon-drop'
-        },
+        // {
+        //   name: 'Lookup',
+        //   url: '/master/lookup-master',
+        //   icon: 'icon-drop'
+        // },
+        // {
+        //   name: 'Auto Notification',
+        //   url: '/master/autonotification-master',
+        //   icon: 'icon-drop'
+        // },
+        // {
+        //   name: 'View Auto Notification',
+        //   url: '/master/view-autonotification-master',
+        //   icon: 'icon-drop'
+        // },
       ],
     }, //end of master
    //Admin module
@@ -166,16 +184,7 @@ export default {
           url: '/master/view-user-role-master',
           icon: 'icon-drop',
         },
-        {
-          name: 'View User Logs',
-          url: '/master/view-user-logs',
-          icon: 'icon-drop',
-        },
-        {
-          name: 'View User Errors',
-          url: '/master/view-user-errors',
-          icon: 'icon-drop',
-        },
+
         {
           name: 'Role Right Details',
           url: '/master/role-right-master',
@@ -185,11 +194,7 @@ export default {
           url: '/master/view-role-right-master',
           icon: 'icon-drop'
          },  
-         {
-          name: 'Api Test',
-          url: '/master/api-test',
-          icon: 'icon-drop',
-        },      
+
       ],
     },//end of admin
   ],

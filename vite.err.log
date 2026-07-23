@@ -1,0 +1,376 @@
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[2m1:39:16 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getContracts[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:39:16 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getProjects[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:39:16 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getContractors[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:39:16 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:39:20 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:39:20 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:44:25 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/saveProjectDetails[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:47:56 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLocations[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:48:10 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUnits[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:48:54 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/GetAutoNotification[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m1:49:42 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[2m2:01:24 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUserRights[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:02:43 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:02:43 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[2m2:02:49 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:02:49 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:02:49 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUserRights[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:02:49 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:02:49 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[2m2:03:38 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:03:38 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:03:38 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUserRights[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:03:39 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:03:39 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[2m2:04:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:04:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:04:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUserRights[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:04:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:04:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:17 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/projects[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:17 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/review/dashboard/stats[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:17 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/knowledge/stats[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/projects[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/review/dashboard/stats[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:18 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/knowledge/stats[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:20 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/projects[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:20 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/drafting-sessions[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:20 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/drafting-sessions/templates[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:20 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/letters[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:20 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:28 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getProjects[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:30 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getLookupDetails?LookupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:30 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUsers[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m2:05:32 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getDepartments?DepartmentId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[2m4:58:36 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUserRights[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m4:58:36 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getDepartments?DepartmentId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m4:58:36 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getDepartments?DepartmentId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:04:12 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getProjects[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[2m5:04:38 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getUserRights[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:04:39 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getProjects[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:04:55 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getDepartments?DepartmentId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:04:59 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getDesignations[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:05:04 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getModuleGroups?moduleGroupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:05:07 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getModuleGroups?moduleGroupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:06:58 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getDepartments?DepartmentId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[2m5:07:02 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /common/getModuleGroups?moduleGroupId=0[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1706:16)
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m
+[33mFiles in the public directory are served at the root path.
+Instead of [36m/public/img/s_logo.png[33m, use [36m/img/s_logo.png[33m.[39m

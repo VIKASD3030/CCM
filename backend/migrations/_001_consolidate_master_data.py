@@ -67,10 +67,10 @@ async def run(conn: AsyncConnection) -> None:
         logger.info("migration.001.master_project_copied", rows=result.rowcount)
 
     # ── Step 2: Copy master_lookup → lookups ──
-    lookup_count = await _count_rows(conn, "master_lookup")
+    lookup_count = await _count_rows(conn, "public.master_lookup")
     if lookup_count > 0:
         result = await conn.execute(text("""
-            INSERT INTO lookups (id, lookup_type, lookup_code, lookup_name, description)
+            INSERT INTO "Master".lookups (id, lookup_type, lookup_code, lookup_name, description)
             SELECT
                 ml.LookupId,
                 ml.LookupType,
@@ -79,16 +79,16 @@ async def run(conn: AsyncConnection) -> None:
                 ml.Description
             FROM master_lookup ml
             WHERE NOT EXISTS (
-                SELECT 1 FROM lookups l WHERE l.id = ml.LookupId
+                SELECT 1 FROM "Master".lookups l WHERE l.id = ml.LookupId
             )
         """))
         logger.info("migration.001.master_lookup_copied", rows=result.rowcount)
 
     # ── Step 3: Copy master_department → departments ──
-    dept_count = await _count_rows(conn, "master_department")
+    dept_count = await _count_rows(conn, "public.master_department")
     if dept_count > 0:
         result = await conn.execute(text("""
-            INSERT INTO departments (id, code, name, parent_id, level, remarks)
+            INSERT INTO "Master".departments (id, code, name, parent_id, level, remarks)
             SELECT
                 md.DepartmentId,
                 md.DepartmentCode,
@@ -98,16 +98,16 @@ async def run(conn: AsyncConnection) -> None:
                 md.Remarks
             FROM master_department md
             WHERE NOT EXISTS (
-                SELECT 1 FROM departments d WHERE d.id = md.DepartmentId
+                SELECT 1 FROM "Master".departments d WHERE d.id = md.DepartmentId
             )
         """))
         logger.info("migration.001.master_department_copied", rows=result.rowcount)
 
     # ── Step 4: Copy master_location → locations ──
-    loc_count = await _count_rows(conn, "master_location")
+    loc_count = await _count_rows(conn, "public.master_location")
     if loc_count > 0:
         result = await conn.execute(text("""
-            INSERT INTO locations (id, name, parent_id, level, remarks)
+            INSERT INTO "Master".locations (id, name, parent_id, level, remarks)
             SELECT
                 ml.LocationId,
                 ml.LocationName,
@@ -116,16 +116,16 @@ async def run(conn: AsyncConnection) -> None:
                 ml.Remarks
             FROM master_location ml
             WHERE NOT EXISTS (
-                SELECT 1 FROM locations l WHERE l.id = ml.LocationId
+                SELECT 1 FROM "Master".locations l WHERE l.id = ml.LocationId
             )
         """))
         logger.info("migration.001.master_location_copied", rows=result.rowcount)
 
     # ── Step 5: Copy master_designation → designations ──
-    desig_count = await _count_rows(conn, "master_designation")
+    desig_count = await _count_rows(conn, "public.master_designation")
     if desig_count > 0:
         result = await conn.execute(text("""
-            INSERT INTO designations (id, code, name, parent_id, level, remarks)
+            INSERT INTO "Master".designations (id, code, name, parent_id, level, remarks)
             SELECT
                 md.DesignationId,
                 md.DesignationCode,
@@ -135,16 +135,16 @@ async def run(conn: AsyncConnection) -> None:
                 md.Remarks
             FROM master_designation md
             WHERE NOT EXISTS (
-                SELECT 1 FROM designations d WHERE d.id = md.DesignationId
+                SELECT 1 FROM "Master".designations d WHERE d.id = md.DesignationId
             )
         """))
         logger.info("migration.001.master_designation_copied", rows=result.rowcount)
 
     # ── Step 6: Copy master_unit → units ──
-    unit_count = await _count_rows(conn, "master_unit")
+    unit_count = await _count_rows(conn, "public.master_unit")
     if unit_count > 0:
         result = await conn.execute(text("""
-            INSERT INTO units (id, code, name, parent_id, level, remarks)
+            INSERT INTO "Master".units (id, code, name, parent_id, level, remarks)
             SELECT
                 mu.UnitId,
                 mu.UnitCode,
@@ -154,14 +154,14 @@ async def run(conn: AsyncConnection) -> None:
                 mu.Remarks
             FROM master_unit mu
             WHERE NOT EXISTS (
-                SELECT 1 FROM units u WHERE u.id = mu.UnitId
+                SELECT 1 FROM "Master".units u WHERE u.id = mu.UnitId
             )
         """))
         logger.info("migration.001.master_unit_copied", rows=result.rowcount)
 
     # ── Step 7: Reassign reviewer users to admin ──
     reviewer_users = await conn.execute(
-        text("SELECT COUNT(*) FROM users WHERE role = 'reviewer'")
+        text('SELECT COUNT(*) FROM "Master".users WHERE role = \'reviewer\'')
     )
     reviewer_count = reviewer_users.scalar() or 0
     logger.info("migration.001.reviewer_users_found", count=reviewer_count)
@@ -172,24 +172,24 @@ async def run(conn: AsyncConnection) -> None:
         # a more specific WHERE clause (e.g., check a custom field or
         # another condition). For now, ALL reviewer users go to admin.
         await conn.execute(
-            text("UPDATE users SET role = 'admin' WHERE role = 'reviewer'")
+            text('UPDATE "Master".users SET role = \'admin\' WHERE role = \'reviewer\'')
         )
         logger.info("migration.001.reviewer_users_reassigned_to_admin", count=reviewer_count)
 
     # ── Step 8: Remove reviewer permissions ──
     reviewer_perms = await conn.execute(
-        text("SELECT COUNT(*) FROM role_permissions WHERE role_name = 'reviewer'")
+        text('SELECT COUNT(*) FROM "Master".role_permissions WHERE role_name = \'reviewer\'')
     )
     perm_count = reviewer_perms.scalar() or 0
     if perm_count > 0:
         await conn.execute(
-            text("DELETE FROM role_permissions WHERE role_name = 'reviewer'")
+            text('DELETE FROM "Master".role_permissions WHERE role_name = \'reviewer\'')
         )
         logger.info("migration.001.reviewer_permissions_deleted", count=perm_count)
 
     # ── Step 9: Remove reviewer role ──
     await conn.execute(
-        text("DELETE FROM roles WHERE name = 'reviewer'")
+        text('DELETE FROM "Master".roles WHERE name = \'reviewer\'')
     )
     logger.info("migration.001.reviewer_role_removed")
 
@@ -202,7 +202,7 @@ async def run(conn: AsyncConnection) -> None:
         "ALTER COLUMN hashed_password DROP NOT NULL",
     ]:
         try:
-            await conn.execute(text(f"ALTER TABLE users {col_spec}"))
+            await conn.execute(text(f'ALTER TABLE "Master".users {col_spec}'))
         except Exception as e:
             logger.warning("migration.001.alter_users_skipped", column=col_spec, error=str(e))
 

@@ -1,6 +1,5 @@
 import React, { Component, Suspense } from 'react'
 import { Navigate, Routes, Route } from 'react-router-dom'
-import { Container } from '@mui/material'
 import { authProvider } from '../../authentication/auth-provider'
 import { setNewSession, getSession, resetSession } from '../../authentication/cookie';
 import { cilLayers, cilSpeedometer, cilPuzzle } from './icon-constants'
@@ -334,7 +333,6 @@ class ExternalLayout extends Component {
           <main
             className={`flex-1 transition-all duration-300 bg-gray-50 main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}
           >
-            <Container fluid className="py-6">
               <Suspense fallback={this.loading()}>
                 <RouteErrorBoundary resetKey={window.location.hash}>
                   <Routes>
@@ -358,7 +356,6 @@ class ExternalLayout extends Component {
                   </Routes>
                 </RouteErrorBoundary>
               </Suspense>
-            </Container>
           </main>
         </React.Fragment>
       </div>

@@ -4,10 +4,15 @@ Idempotent RBAC seed — replaces the old Alembic migration f80533d1bf3e.
 Called from init_db() after create_all so permissions always exist
 even when Alembic is removed.
 """
+from datetime import datetime, timezone
+import uuid
+
 import structlog
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 logger = structlog.get_logger()
+
+SCHEMA = "Master"
 
 MODULES = [
     ("users", "User Management"),
@@ -62,6 +67,8 @@ PERMISSIONS = [
 async def seed_rbac(conn: AsyncConnection) -> None:
     from sqlalchemy import text
 
+    now = datetime.now(timezone.utc)
+
     roles = [
         ("admin", "Full system access"),
         ("drafter", "Creates letters, drafts, and knowledge base entries"),
@@ -69,36 +76,38 @@ async def seed_rbac(conn: AsyncConnection) -> None:
     for name, desc in roles:
         await conn.execute(
             text(
-                "INSERT INTO roles (name, description, is_system) "
-                "VALUES (:name, :desc, TRUE) ON CONFLICT (name) DO NOTHING"
+                f'INSERT INTO "{SCHEMA}".roles (name, description, is_system, created_at) '
+                "VALUES (:name, :desc, TRUE, :created_at) ON CONFLICT (name) DO NOTHING"
             ),
-            {"name": name, "desc": desc},
+            {"name": name, "desc": desc, "created_at": now},
         )
 
     for key, label in MODULES:
         await conn.execute(
             text(
-                "INSERT INTO modules (key, label) "
-                "VALUES (:key, :label) ON CONFLICT (key) DO NOTHING"
+                f'INSERT INTO "{SCHEMA}".modules (key, label, created_at) '
+                "VALUES (:key, :label, :created_at) ON CONFLICT (key) DO NOTHING"
             ),
-            {"key": key, "label": label},
+            {"key": key, "label": label, "created_at": now},
         )
 
     for role, module, can_view, can_create, can_edit, can_delete in PERMISSIONS:
         await conn.execute(
             text(
-                "INSERT INTO role_permissions "
-                "(role_name, module_key, can_view, can_create, can_edit, can_delete) "
-                "VALUES (:role, :module, :v, :c, :e, :d) "
+                f'INSERT INTO "{SCHEMA}".role_permissions '
+                "(id, role_name, module_key, can_view, can_create, can_edit, can_delete, created_at) "
+                "VALUES (:id, :role, :module, :v, :c, :e, :d, :created_at) "
                 "ON CONFLICT (role_name, module_key) DO NOTHING"
             ),
             {
+                "id": uuid.uuid4(),
                 "role": role,
                 "module": module,
                 "v": can_view,
                 "c": can_create,
                 "e": can_edit,
                 "d": can_delete,
+                "created_at": now,
             },
         )
 

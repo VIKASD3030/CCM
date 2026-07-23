@@ -137,7 +137,13 @@ class Settings(BaseSettings):
     @classmethod
     def parse_allowed_origins(cls, value):
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
+            if value.startswith("[") and value.endswith("]"):
+                try:
+                    import json
+                    return json.loads(value)
+                except Exception:
+                    pass
+            return [item.strip(" '\"[]") for item in value.split(",") if item.strip(" '\"[]")]
         return value
 
     @model_validator(mode="after")

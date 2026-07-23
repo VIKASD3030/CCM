@@ -3,6 +3,7 @@ Database engine, session factory, and dependency injection for FastAPI.
 """
 
 import structlog
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from backend.config import get_settings
@@ -23,6 +24,13 @@ engine = create_async_engine(
     str(settings.database.url),
     **engine_kwargs,
 )
+
+
+@event.listens_for(engine.sync_engine, "connect")
+def _set_search_path(dbapi_conn, _rec):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("SET search_path TO Master, public")
+    cursor.close()
 
 async_session_factory = async_sessionmaker(
     engine,
@@ -73,7 +81,7 @@ async def init_db():
         # Add master-data status columns idempotently (create_all does not ALTER)
         for tbl in ("departments", "locations", "designations", "units", "lookups"):
             await conn.execute(text(
-                f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS status VARCHAR(10) DEFAULT '1'"
+                f'ALTER TABLE "Master".{tbl} ADD COLUMN IF NOT EXISTS status VARCHAR(10) DEFAULT \'1\''
             ))
 
         # Run master schema consolidation migration if master tables exist

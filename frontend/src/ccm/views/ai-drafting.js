@@ -4,8 +4,22 @@
  * persistence via the /api/drafting-sessions API. Behavior preserved 1:1.
  */
 import React from 'react';
-import { Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import {
+  Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button,
+  Box, Typography, TextField, IconButton, Avatar, Chip, Tooltip, Drawer, Divider,
+  CircularProgress, Backdrop, Stack, InputAdornment, Tab, Tabs, LinearProgress,
+} from '@mui/material';
+import {
+  Add as AddIcon, Search as SearchIcon, Send as SendIcon, AttachFile as AttachIcon,
+  ContentCopy as CopyIcon, Refresh as RefreshIcon, Check as CheckIcon, Close as CloseIcon,
+  MoreVert as MoreIcon, AutoAwesome as SparkleIcon, PushPin as PinIcon, Delete as DeleteIcon,
+  Description as DocIcon, Folder as FolderIcon, SmartToy as RobotIcon, Person as PersonIcon,
+  MenuBook as BookIcon, Upload as UploadIcon, ExpandMore as ExpandIcon,
+  ChevronLeft as CollapseIcon, ChevronRight as ExpandSidebarIcon,
+  Menu as MenuIcon,
+} from '@mui/icons-material';
 import CCM from '../ccm-api';
+import { AppBreadcrumbs } from '../../components/ui';
 import '../ccm.css';
 
 const DRAFTABLE = ['classified', 'drafted', 'pending_review', 'approved'];
@@ -27,7 +41,7 @@ class AiDrafting extends React.Component {
       projects: [],
       messages: [],
       // ui
-      activeView: false,       // false = empty state, true = active conversation
+      activeView: false,
       sidebarCollapsed: false,
       isGenerating: false,
       searchTerm: '',
@@ -342,8 +356,11 @@ class AiDrafting extends React.Component {
 
   // ── Rendering helpers ─────────────────────────────────────
   renderDraftText(text) {
-    if (!text) return <em style={{ color: 'var(--text-tertiary)' }}>No content</em>;
-    return text.split('\n').map((p, i) => p.trim() ? <p key={i}>{p}</p> : <br key={i} />);
+    if (!text) return <Typography sx={{ color: '#9CA3AF', fontStyle: 'italic' }}>No content</Typography>;
+    return text.split('\n').map((p, i) => p.trim()
+      ? <Typography key={i} sx={{ fontSize: 14, lineHeight: 1.7, color: '#374151', mb: 0.5 }}>{p}</Typography>
+      : <Box key={i} sx={{ height: 8 }} />
+    );
   }
 
   groupedSessions() {
@@ -362,21 +379,37 @@ class AiDrafting extends React.Component {
   renderSessionItem(s) {
     const isActive = s.id === this.state.currentSessionId;
     return (
-      <div key={s.id} className={`dsb-session-item ${isActive ? 'active' : ''} ${s.is_pinned ? 'pinned' : ''}`}
-        onClick={() => this.openSession(s.id)}>
-        <div className="dsi-content">
-          <div className="dsi-title" title={s.title || 'Draft'}>{s.title || 'Draft'}</div>
-          <div className="dsi-preview">{s.preview || ''}</div>
-        </div>
-        <div className="dsi-actions">
-          <button className="dsi-action-btn" onClick={(e) => this.togglePin(s.id, e)} title={s.is_pinned ? 'Unpin' : 'Pin'}>
-            <i className={`ti ${s.is_pinned ? 'ti-pin-filled' : 'ti-pin'}`} />
-          </button>
-          <button className="dsi-action-btn dsi-delete-btn" onClick={(e) => this.deleteSession(s.id, e)} title="Delete">
-            <i className="ti ti-trash" />
-          </button>
-        </div>
-      </div>
+      <Box
+        key={s.id}
+        onClick={() => this.openSession(s.id)}
+        sx={{
+          display: 'flex', alignItems: 'center', px: 2, py: 1.25, mx: 1, mb: 0.25, borderRadius: '10px',
+          cursor: 'pointer', position: 'relative', transition: 'all 0.15s ease',
+          bgcolor: isActive ? '#EFF6FF' : 'transparent',
+          borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
+          '&:hover': { bgcolor: isActive ? '#EFF6FF' : '#F8FAFC' },
+          '&:hover .session-actions': { opacity: 1 },
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.title || 'Draft'}>
+            {s.title || 'Draft'}
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', mt: 0.25 }}>
+            {s.preview || ''}
+          </Typography>
+        </Box>
+        <Box className="session-actions" sx={{ display: 'flex', gap: 0.25, opacity: isActive ? 1 : 0, transition: 'opacity 0.15s' }}>
+          <IconButton size="small" onClick={(e) => this.togglePin(s.id, e)} title={s.is_pinned ? 'Unpin' : 'Pin'}
+            sx={{ color: s.is_pinned ? '#2563EB' : '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, p: 0.5 }}>
+            <PinIcon sx={{ fontSize: 15 }} />
+          </IconButton>
+          <IconButton size="small" onClick={(e) => this.deleteSession(s.id, e)} title="Delete"
+            sx={{ color: '#9CA3AF', '&:hover': { color: '#EF4444', bgcolor: '#FEF2F2' }, p: 0.5 }}>
+            <DeleteIcon sx={{ fontSize: 15 }} />
+          </IconButton>
+        </Box>
+      </Box>
     );
   }
 
@@ -384,41 +417,102 @@ class AiDrafting extends React.Component {
     const role = msg.role;
     if (msg.thinking) {
       return (
-        <div className="drafting-message assistant thinking" key={msg.id}>
-          <div className="dm-avatar"><i className="ti ti-robot" /></div>
-          <div className="dm-body">
-            <div className="typing-indicator"><span /><span /><span /></div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Generating draft…</div>
-          </div>
-        </div>
+        <Box key={msg.id} sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'flex-start' }}>
+          <Avatar sx={{ width: 32, height: 32, bgcolor: '#F3F4F6', color: '#6B7280', mt: 0.25 }}>
+            <RobotIcon sx={{ fontSize: 16 }} />
+          </Avatar>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', py: 1.5, px: 2, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '18px 18px 18px 4px', minWidth: 80 }}>
+              {[0, 1, 2].map(i => (
+                <Box key={i} sx={{
+                  width: 7, height: 7, borderRadius: '50%', bgcolor: '#9CA3AF',
+                  animation: `pulse 1.4s ease-in-out ${i * 0.2}s infinite`,
+                  '@keyframes pulse': {
+                    '0%, 80%, 100%': { opacity: 0.3, transform: 'scale(0.85)' },
+                    '40%': { opacity: 1, transform: 'scale(1.1)' },
+                  },
+                }} />
+              ))}
+            </Box>
+            <Typography sx={{ fontSize: 11, color: '#9CA3AF', ml: 1 }}>Generating draft…</Typography>
+          </Box>
+        </Box>
       );
     }
     const contextDocs = msg.context_documents || [];
     const approved = msg.draft_status === 'approved';
+    const isUser = role === 'user';
+
     return (
-      <div className={`drafting-message ${role}`} key={msg.id || idx}>
-        <div className="dm-avatar">{role === 'user' ? <i className="ti ti-user" /> : <i className="ti ti-robot" />}</div>
-        <div className="dm-body">
-          {msg.draft_version ? <div className="dm-version-badge">v{msg.draft_version} · {(msg.draft_status || 'draft').replace('_', ' ')}</div> : null}
-          <div className={`dm-content ${role === 'assistant' ? 'dm-draft-text' : ''}`}>
-            {role === 'user' ? <p>{msg.content}</p> : this.renderDraftText(msg.content)}
-          </div>
-          {role === 'assistant' && (
-            <div className="dm-actions">
-              <button className="dm-action" onClick={() => this.regenerateFromMessage(idx)} title="Regenerate"><i className="ti ti-refresh" /> Regenerate</button>
-              <button className="dm-action" onClick={() => this.copyMessage(msg.content)} title="Copy"><i className="ti ti-copy" /> Copy</button>
-              {approved
-                ? <span className="dm-approved-badge"><i className="ti ti-check" /> Approved</span>
-                : <button className="dm-action dm-approve-btn" onClick={() => this.approveDraft(msg.draft_response_id, idx)} title="Approve"><i className="ti ti-check" /> Approve</button>}
-              {contextDocs.length ? (
-                <button className="dm-action" onClick={() => this.setState({ lastSourceDocs: contextDocs, sourcesOpen: true })} title="Sources">
-                  <i className="ti ti-books" /> {contextDocs.length} source{contextDocs.length !== 1 ? 's' : ''}
-                </button>
-              ) : null}
-            </div>
+      <Box key={msg.id || idx} sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'flex-start', flexDirection: isUser ? 'row-reverse' : 'row' }}>
+        <Avatar sx={{
+          width: 32, height: 32, mt: 0.25,
+          bgcolor: isUser ? '#2563EB' : '#F3F4F6',
+          color: isUser ? '#FFFFFF' : '#6B7280',
+        }}>
+          {isUser ? <PersonIcon sx={{ fontSize: 16 }} /> : <RobotIcon sx={{ fontSize: 16 }} />}
+        </Avatar>
+        <Box sx={{ maxWidth: '75%', minWidth: 60 }}>
+          {msg.draft_version && (
+            <Chip
+              size="small"
+              label={`v${msg.draft_version} · ${(msg.draft_status || 'draft').replace('_', ' ')}`}
+              sx={{ height: 22, fontSize: 11, mb: 0.75, bgcolor: isUser ? 'rgba(255,255,255,0.2)' : '#F3F4F6', color: isUser ? '#fff' : '#6B7280' }}
+            />
           )}
-        </div>
-      </div>
+          <Box sx={{
+            px: 2.5, py: isUser ? 1.5 : 2,
+            bgcolor: isUser ? '#2563EB' : '#FFFFFF',
+            color: isUser ? '#fff' : '#374151',
+            border: isUser ? 'none' : '1px solid #E5E7EB',
+            borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+            boxShadow: isUser ? '0 1px 2px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
+          }}>
+            {isUser
+              ? <Typography sx={{ fontSize: 14, lineHeight: 1.6 }}>{msg.content}</Typography>
+              : this.renderDraftText(msg.content)
+            }
+          </Box>
+          {!isUser && (
+            <Stack direction="row" spacing={0.5} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
+              <Tooltip title="Regenerate">
+                <IconButton size="small" onClick={() => this.regenerateFromMessage(idx)} sx={{ color: '#6B7280', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' } }}>
+                  <RefreshIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Copy">
+                <IconButton size="small" onClick={() => this.copyMessage(msg.content)} sx={{ color: '#6B7280', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' } }}>
+                  <CopyIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+              {approved
+                ? (
+                  <Chip
+                    size="small"
+                    icon={<CheckIcon sx={{ fontSize: 13, color: '#16A34A !important' }} />}
+                    label="Approved"
+                    sx={{ height: 24, fontSize: 11, bgcolor: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0' }}
+                  />
+                )
+                : (
+                  <Tooltip title="Approve">
+                    <IconButton size="small" onClick={() => this.approveDraft(msg.draft_response_id, idx)} sx={{ color: '#6B7280', '&:hover': { color: '#16A34A', bgcolor: '#F0FDF4' } }}>
+                      <CheckIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Tooltip>
+                )
+              }
+              {contextDocs.length ? (
+                <Tooltip title={`${contextDocs.length} source${contextDocs.length !== 1 ? 's' : ''}`}>
+                  <IconButton size="small" onClick={() => this.setState({ lastSourceDocs: contextDocs, sourcesOpen: true })} sx={{ color: '#6B7280', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' } }}>
+                    <BookIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
+          )}
+        </Box>
+      </Box>
     );
   }
 
@@ -440,226 +534,492 @@ class AiDrafting extends React.Component {
       return mq && mp;
     });
 
+    const SIDEBAR_W = sidebarCollapsed ? 64 : 280;
+
     return (
-      <div className="ccm-scope">
-        <div className={`drafting-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-          {/* Sidebar */}
-          <aside className={`drafting-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-            <div className="drafting-sidebar-inner">
-              <div className="dsb-top">
-                <button className="sidebar-toggle-btn" onClick={() => this.setState(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))} title="Collapse sidebar">
-                  <i className={`ti ${sidebarCollapsed ? 'ti-layout-sidebar-left-expand' : 'ti-layout-sidebar-left-collapse'}`} />
-                </button>
-                <button className="new-draft-btn" onClick={this.startNewDraft}>
-                  <i className="ti ti-edit" /><span className="dsb-label">New Draft</span>
-                </button>
-              </div>
+      <Box className="ccm-scope" sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', bgcolor: '#F8FAFC', overflow: 'hidden' }}>
+        <Box sx={{ px: 3, pt: 2, pb: 0 }}>
+          <AppBreadcrumbs />
+        </Box>
+        <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* ─── Sidebar ─── */}
+          <Box sx={{
+            width: SIDEBAR_W, flexShrink: 0, display: 'flex', flexDirection: 'column',
+            bgcolor: '#FFFFFF', borderRight: '1px solid #E5E7EB',
+            transition: 'width 0.2s ease', overflow: 'hidden',
+          }}>
+            {/* Sidebar top */}
+            <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1, borderBottom: '1px solid #F3F4F6' }}>
+              <IconButton size="small" onClick={() => this.setState(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))}
+                sx={{ color: '#6B7280', '&:hover': { bgcolor: '#F3F4F6' } }}>
+                {sidebarCollapsed ? <ExpandSidebarIcon sx={{ fontSize: 20 }} /> : <CollapseIcon sx={{ fontSize: 20 }} />}
+              </IconButton>
+              {!sidebarCollapsed && (
+                <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+                    onClick={this.startNewDraft}
+                    sx={{
+                      textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '10px',
+                      bgcolor: '#2563EB', boxShadow: 'none',
+                      '&:hover': { bgcolor: '#1D4ED8', boxShadow: 'none' },
+                    }}
+                  >
+                    New Draft
+                  </Button>
+                </Box>
+              )}
+            </Box>
 
-              <div className="dsb-search-wrap dsb-label-item">
-                <div className="dsb-search">
-                  <i className="ti ti-search" />
-                  <input type="text" placeholder="Search drafts…" value={searchTerm} onChange={(e) => this.onSearch(e.target.value)} />
-                </div>
-              </div>
+            {/* Search */}
+            {!sidebarCollapsed && (
+              <Box sx={{ px: 1.5, pt: 1.5, pb: 0.5 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Search drafts…"
+                  value={searchTerm}
+                  onChange={(e) => this.onSearch(e.target.value)}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} /></InputAdornment>,
+                    sx: {
+                      borderRadius: '10px', fontSize: 13, bgcolor: '#F9FAFB',
+                      '& fieldset': { borderColor: '#E5E7EB' },
+                      '&:hover fieldset': { borderColor: '#D1D5DB' },
+                      '&.Mui-focused fieldset': { borderColor: '#2563EB', borderWidth: 1 },
+                    },
+                  }}
+                />
+              </Box>
+            )}
 
-              <div className="dsb-session-list">
-                {!groups.length ? (
-                  <div className="dsb-empty"><i className="ti ti-messages-off" /><span>No drafts yet</span></div>
+            {/* Session list */}
+            <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
+              {sidebarCollapsed ? (
+                /* Collapsed icons */
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, px: 0.5 }}>
+                  {sessions.slice(0, 20).map(s => {
+                    const isActive = s.id === this.state.currentSessionId;
+                    return (
+                      <Tooltip key={s.id} title={s.title || 'Draft'} placement="right">
+                        <IconButton size="small" onClick={() => this.openSession(s.id)} sx={{
+                          width: 40, height: 40, borderRadius: '10px',
+                          bgcolor: isActive ? '#EFF6FF' : 'transparent',
+                          color: isActive ? '#2563EB' : '#6B7280',
+                          '&:hover': { bgcolor: isActive ? '#EFF6FF' : '#F3F4F6' },
+                        }}>
+                          <DocIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Tooltip>
+                    );
+                  })}
+                </Box>
+              ) : (
+                !groups.length ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6, color: '#9CA3AF' }}>
+                    <DocIcon sx={{ fontSize: 32, mb: 1, opacity: 0.4 }} />
+                    <Typography sx={{ fontSize: 13 }}>No drafts yet</Typography>
+                  </Box>
                 ) : groups.map(g => (
                   <React.Fragment key={g.label}>
-                    <div className="dsb-group-label dsb-label">{g.label}</div>
+                    <Typography sx={{ px: 3, pt: 2, pb: 0.75, fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      {g.label}
+                    </Typography>
                     {g.items.map(s => this.renderSessionItem(s))}
                   </React.Fragment>
-                ))}
-              </div>
+                ))
+              )}
+            </Box>
 
-              <div className="dsb-profile dsb-label-item">
-                <div className="dsb-profile-avatar">{initials}</div>
-                <div className="dsb-profile-info dsb-label">
-                  <div className="dsb-profile-name">{name}</div>
-                  <div className="dsb-profile-role">{(profile?.role || '').replace(/^\w/, c => c.toUpperCase())}</div>
-                </div>
-              </div>
-            </div>
-          </aside>
-
-          {/* Main */}
-          <main className="drafting-main">
-            {!activeView ? (
-              <div className="drafting-empty">
-                <div className="drafting-empty-inner">
-                  <div className="drafting-empty-logo"><i className="ti ti-writing" /></div>
-                  <h2 className="drafting-empty-greeting">What would you like to draft?</h2>
-                  <p className="drafting-empty-sub">Select a letter and describe what to write — or click a template below.</p>
-
-                  <div className="drafting-empty-composer">
-                    <div className="dec-inner">
-                      <button className="dec-attach-btn" onClick={this.openLetterPicker} title="Attach letter"><i className="ti ti-plus" /></button>
-                      <textarea className="dec-textarea" placeholder="Ask anything…" rows="1" value={emptyInput}
-                        onChange={(e) => { this.setState({ emptyInput: e.target.value }); this.autoResize(e); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendFromEmpty(); } }} />
-                      <button className="dec-send-btn" onClick={this.sendFromEmpty} title="Send"><i className="ti ti-arrow-up" /></button>
-                    </div>
-                    <div className="dec-context-hint">
-                      {currentLetterData
-                        ? <span><i className="ti ti-file-text" style={{ color: 'var(--accent)' }} /> <strong>{currentLetterData.filename || 'Letter'}</strong> selected</span>
-                        : <span>No letter selected — click <strong>+</strong> to attach one</span>}
-                    </div>
-                  </div>
-
-                  <div className="drafting-template-chips">
-                    {templates.map((t, i) => (
-                      <button className="drafting-chip" key={i} onClick={() => this.useTemplate(t.prompt_text)}>
-                        <i className={`ti ${t.icon || 'ti-sparkles'}`} /> {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="drafting-active">
-                <div className="drafting-context-bar">
-                  <div className="dcb-left">
-                    <i className="ti ti-file-text" />
-                    <span className="dcb-letter">{currentLetterData?.filename || '—'}</span>
-                    <span className="dcb-sep">·</span>
-                    <i className="ti ti-folder" />
-                    <span className="dcb-project">{currentProjectData?.name || '—'}</span>
-                  </div>
-                  <div className="dcb-right">
-                    {lastSourceDocs.length ? (
-                      <button className="dcb-sources-btn" onClick={this.toggleSourcesPanel}>
-                        <i className="ti ti-books" /> <span>{lastSourceDocs.length} source{lastSourceDocs.length !== 1 ? 's' : ''}</span>
-                      </button>
-                    ) : null}
-                    <button className="dcb-close-btn" onClick={this.closeSession} title="Close session"><i className="ti ti-x" /></button>
-                  </div>
-                </div>
-
-                <div className="drafting-thread" ref={this.threadRef}>
-                  {!messages.length ? (
-                    <div className="drafting-thread-empty"><i className="ti ti-sparkles" /><p>Send a message to start drafting</p></div>
-                  ) : messages.map((m, i) => this.renderMessage(m, i))}
-                </div>
-
-                {sourcesOpen && (
-                  <div className="drafting-sources-panel">
-                    <div className="dsp-header">
-                      <span><i className="ti ti-books" /> Source Documents</span>
-                      <button onClick={this.toggleSourcesPanel}><i className="ti ti-x" /></button>
-                    </div>
-                    <div className="dsp-body">
-                      {!lastSourceDocs.length ? (
-                        <div className="dsb-empty"><i className="ti ti-books-off" /> No source documents</div>
-                      ) : lastSourceDocs.map((d, i) => (
-                        <div className="dsp-source-item" key={i}>
-                          <i className="ti ti-file-text" />
-                          <div>
-                            <div className="dsp-source-name">{d.source || 'Document'}</div>
-                            <div className="dsp-source-meta">{d.similarity != null ? `Relevance: ${(d.similarity * 100).toFixed(1)}%` : ''}</div>
-                            {d.chunk_text ? <div className="dsp-source-preview">{d.chunk_text.substring(0, 150)}…</div> : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="drafting-composer">
-                  <div className="dc-wrapper">
-                    <button className="dc-attach-btn" onClick={this.openLetterPicker} title="Switch letter"><i className="ti ti-plus" /></button>
-                    <textarea className="dc-textarea" placeholder="Refine the draft, or ask for another…" rows="1" value={activeInput}
-                      onChange={(e) => { this.setState({ activeInput: e.target.value }); this.autoResize(e); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); } }} />
-                    <button className="dc-send-btn" onClick={this.sendMessage} title="Send"><i className="ti ti-arrow-up" /></button>
-                  </div>
-                  <div className="dc-footer">
-                    <span className="text-xs text-tertiary">{currentLetterData ? `Letter: ${currentLetterData.filename || 'selected'}` : 'No letter selected'}</span>
-                  </div>
-                </div>
-              </div>
+            {/* Profile */}
+            {!sidebarCollapsed && (
+              <Box sx={{ p: 1.5, borderTop: '1px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                <Avatar sx={{ width: 36, height: 36, bgcolor: '#EEF2FF', color: '#4F46E5', fontSize: 13, fontWeight: 700 }}>
+                  {initials}
+                </Avatar>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</Typography>
+                  <Typography sx={{ fontSize: 11, color: '#9CA3AF', textTransform: 'capitalize' }}>{(profile?.role || '').replace(/^\w/, c => c.toUpperCase())}</Typography>
+                </Box>
+              </Box>
             )}
-          </main>
-        </div>
+          </Box>
 
-        {/* Letter picker modal */}
-        {pickerOpen && (
-          <div className="lp-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) this.closeLetterPicker(); }}>
-            <div className="lp-modal">
-              <div className="lp-modal-header">
-                <span><i className="ti ti-file-search" /> Select Letter & Project</span>
-                <button onClick={this.closeLetterPicker}><i className="ti ti-x" /></button>
-              </div>
-              <div className="lp-modal-body" style={{ paddingTop: 10 }}>
-                <div className="cat-tabs" style={{ marginBottom: 15, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-                  <button className={`cat-tab ${pickerTab === 'select' ? 'active' : ''}`} onClick={() => this.setState({ pickerTab: 'select' })}>Select Existing</button>
-                  <button className={`cat-tab ${pickerTab === 'upload' ? 'active' : ''}`} onClick={() => this.setState({ pickerTab: 'upload' })}>Upload New</button>
-                </div>
+          {/* ─── Main area ─── */}
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+            {!activeView ? (
+              /* ─── Empty state ─── */
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
+                <Box sx={{ maxWidth: 600, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <Box sx={{
+                    width: 64, height: 64, borderRadius: '18px',
+                    background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3,
+                    boxShadow: '0 8px 24px rgba(37,99,235,0.25)',
+                  }}>
+                    <SparkleIcon sx={{ fontSize: 32, color: '#FFFFFF' }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ fontSize: 24, fontWeight: 700, color: '#111827', mb: 1 }}>
+                    What would you like to draft?
+                  </Typography>
+                  <Typography sx={{ color: '#6B7280', mb: 4, lineHeight: 1.6 }}>
+                    Select a letter and describe what to write — or click a template below.
+                  </Typography>
 
-                {pickerTab === 'select' ? (
-                  <div>
-                    <div className="lp-field">
-                      <label>Project</label>
-                      <select className="filter-select" value={pickerProjectId} onChange={(e) => this.setState({ pickerProjectId: e.target.value })}>
-                        <option value="">All Projects</option>
-                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="lp-field" style={{ marginTop: 10 }}>
-                      <label>Search letters</label>
-                      <input type="text" className="form-input" placeholder="Filter by filename…" value={pickerSearch} onChange={(e) => this.setState({ pickerSearch: e.target.value })} />
-                    </div>
-                    <div className="lp-letter-list" style={{ marginTop: 10 }}>
-                      {!pickerLetters.length ? (
-                        <div className="dsb-empty"><i className="ti ti-mail-off" /> No letters found</div>
-                      ) : pickerLetters.map(l => {
-                        const sel = l.id === this.state.currentLetterId;
-                        return (
-                          <div key={l.id} className={`lp-letter-item ${sel ? 'selected' : ''}`} onClick={() => this.selectLetter(l.id)}>
-                            <div className="lp-letter-icon"><i className="ti ti-file-text" /></div>
-                            <div className="lp-letter-info">
-                              <div className="lp-letter-name">{l.filename || 'Letter'}</div>
-                              <div className="lp-letter-meta">
-                                <span className={`status-pill ${l.status}`} style={{ fontSize: 9 }}>{(l.status || '').replace('_', ' ')}</span>
-                                {l.category ? <span className="text-xs text-tertiary">{l.category.replace(/_/g, ' ')}</span> : null}
-                              </div>
-                            </div>
-                            {sel ? <i className="ti ti-check lp-check" /> : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="lp-field">
-                      <label>Project Scope</label>
-                      <select className="filter-select" style={{ width: '100%' }} value={pickerUploadProjectId} onChange={(e) => this.setState({ pickerUploadProjectId: e.target.value })}>
-                        <option value="">All Projects / Global</option>
-                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="upload-zone" style={{ marginTop: 15 }} onClick={() => this.fileInputRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); this.onPickerFile(e.dataTransfer.files[0]); }}>
-                      <div className="upload-zone-icon"><i className="ti ti-mail" /></div>
-                      <div className="upload-zone-title">Drop your letter here, or click to browse</div>
-                      <div className="upload-zone-hint">PDF, DOCX, JPG, PNG · Max 20 MB</div>
-                      <input ref={this.fileInputRef} type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => this.onPickerFile(e.target.files[0])} />
-                    </div>
-                    {uploadStatus && (
-                      <div style={{ marginTop: 15 }}>
-                        <div className={uploadStatus.type === 'error' ? 'upload-error' : 'upload-success'}>
-                          <i className={`ti ${uploadStatus.type === 'error' ? 'ti-alert-circle' : uploadStatus.type === 'loading' ? 'ti-loader' : 'ti-check-circle'}`} /> {uploadStatus.msg}
-                        </div>
-                      </div>
+                  {/* Composer */}
+                  <Box sx={{
+                    width: '100%', bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '16px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden',
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-end', px: 1, py: 1 }}>
+                      <IconButton onClick={this.openLetterPicker} title="Attach letter"
+                        sx={{ color: '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, mr: 0.5 }}>
+                        <AttachIcon sx={{ fontSize: 20 }} />
+                      </IconButton>
+                      <TextField
+                        multiline
+                        maxRows={4}
+                        fullWidth
+                        placeholder="Ask anything…"
+                        value={emptyInput}
+                        onChange={(e) => { this.setState({ emptyInput: e.target.value }); this.autoResize(e); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendFromEmpty(); } }}
+                        variant="standard"
+                        InputProps={{
+                          disableUnderline: true,
+                          sx: { fontSize: 14, py: 0.75, color: '#111827', '& textarea': { '&::placeholder': { color: '#9CA3AF', opacity: 1 } } },
+                        }}
+                      />
+                      <IconButton onClick={this.sendFromEmpty} title="Send" sx={{
+                        bgcolor: emptyInput.trim() ? '#2563EB' : '#E5E7EB',
+                        color: emptyInput.trim() ? '#FFFFFF' : '#9CA3AF',
+                        width: 36, height: 36, ml: 0.5,
+                        '&:hover': { bgcolor: emptyInput.trim() ? '#1D4ED8' : '#D1D5DB' },
+                      }}>
+                        <SendIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Box>
+                    <Box sx={{ px: 2, pb: 1.5, pt: 0 }}>
+                      <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
+                        {currentLetterData
+                          ? <><DocIcon sx={{ fontSize: 14, color: '#2563EB', verticalAlign: 'middle', mr: 0.5 }} /><strong style={{ color: '#374151' }}>{currentLetterData.filename || 'Letter'}</strong> selected</>
+                          : 'No letter selected — click + to attach one'}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Template chips */}
+                  {templates.length > 0 && (
+                    <Box sx={{ display: 'flex', gap: 1, mt: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {templates.map((t, i) => (
+                        <Chip
+                          key={i}
+                          variant="outlined"
+                          icon={<SparkleIcon sx={{ fontSize: 14, color: '#7C3AED !important' }} />}
+                          label={t.label}
+                          onClick={() => this.useTemplate(t.prompt_text)}
+                          sx={{
+                            borderRadius: '10px', borderColor: '#E5E7EB', color: '#374151', fontSize: 13,
+                            px: 0.5,
+                            '&:hover': { bgcolor: '#F5F3FF', borderColor: '#7C3AED', color: '#7C3AED' },
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            ) : (
+              /* ─── Active view ─── */
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {/* Context bar */}
+                <Box sx={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  px: 2.5, py: 1, bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', minHeight: 48,
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
+                    <DocIcon sx={{ fontSize: 18, color: '#2563EB', flexShrink: 0 }} />
+                    <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {currentLetterData?.filename || '—'}
+                    </Typography>
+                    {currentProjectData && (
+                      <>
+                        <Typography sx={{ color: '#D1D5DB', mx: 0.5 }}>·</Typography>
+                        <FolderIcon sx={{ fontSize: 14, color: '#9CA3AF', flexShrink: 0 }} />
+                        <Typography sx={{ fontSize: 12, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {currentProjectData?.name || '—'}
+                        </Typography>
+                      </>
                     )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                    {lastSourceDocs.length ? (
+                      <Button
+                        size="small"
+                        startIcon={<BookIcon sx={{ fontSize: 16 }} />}
+                        onClick={this.toggleSourcesPanel}
+                        sx={{ textTransform: 'none', fontSize: 12, color: '#6B7280', borderRadius: '8px', px: 1.5,
+                          '&:hover': { bgcolor: '#F3F4F6' } }}
+                      >
+                        {lastSourceDocs.length} source{lastSourceDocs.length !== 1 ? 's' : ''}
+                      </Button>
+                    ) : null}
+                    <IconButton size="small" onClick={this.closeSession} title="Close session"
+                      sx={{ color: '#9CA3AF', '&:hover': { color: '#EF4444', bgcolor: '#FEF2F2' } }}>
+                      <CloseIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Box>
+                </Box>
 
+                {/* Thread */}
+                <Box ref={this.threadRef} sx={{
+                  flex: 1, overflow: 'auto', px: 3, py: 3,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                }}>
+                  <Box sx={{ width: '100%', maxWidth: 800 }}>
+                    {!messages.length ? (
+                      <Box sx={{ textAlign: 'center', py: 8 }}>
+                        <SparkleIcon sx={{ fontSize: 40, color: '#D1D5DB', mb: 1.5 }} />
+                        <Typography sx={{ color: '#9CA3AF', fontSize: 14 }}>Send a message to start drafting</Typography>
+                      </Box>
+                    ) : messages.map((m, i) => this.renderMessage(m, i))}
+                  </Box>
+                </Box>
+
+                {/* Composer */}
+                <Box sx={{ bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', px: 3, py: 2 }}>
+                  <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-end', bgcolor: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '14px', px: 1, py: 0.75, '&:focus-within': { borderColor: '#2563EB', boxShadow: '0 0 0 3px rgba(37,99,235,0.08)' }, transition: 'all 0.15s ease' }}>
+                      <IconButton onClick={this.openLetterPicker} title="Switch letter"
+                        sx={{ color: '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, mr: 0.5 }}>
+                        <AttachIcon sx={{ fontSize: 20 }} />
+                      </IconButton>
+                      <TextField
+                        multiline
+                        maxRows={4}
+                        fullWidth
+                        placeholder="Refine the draft, or ask for another…"
+                        value={activeInput}
+                        onChange={(e) => { this.setState({ activeInput: e.target.value }); this.autoResize(e); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); } }}
+                        variant="standard"
+                        InputProps={{
+                          disableUnderline: true,
+                          sx: { fontSize: 14, py: 0.5, color: '#111827', '& textarea': { '&::placeholder': { color: '#9CA3AF', opacity: 1 } } },
+                        }}
+                      />
+                      <IconButton onClick={this.sendMessage} title="Send" disabled={this.state.isGenerating} sx={{
+                        bgcolor: activeInput.trim() ? '#2563EB' : '#E5E7EB',
+                        color: activeInput.trim() ? '#FFFFFF' : '#9CA3AF',
+                        width: 36, height: 36, ml: 0.5,
+                        '&:hover': { bgcolor: activeInput.trim() ? '#1D4ED8' : '#D1D5DB' },
+                        '&.Mui-disabled': { bgcolor: '#F3F4F6', color: '#D1D5DB' },
+                      }}>
+                        <SendIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Box>
+                    <Typography sx={{ fontSize: 11, color: '#9CA3AF', mt: 0.75, ml: 1 }}>
+                      {currentLetterData ? `Letter: ${currentLetterData.filename || 'selected'}` : 'No letter selected'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+
+            {/* ─── Sources Drawer ─── */}
+            <Drawer
+              anchor="right"
+              open={sourcesOpen}
+              onClose={this.toggleSourcesPanel}
+              variant="temporary"
+              PaperProps={{ sx: { width: 360, borderRadius: '16px 0 0 16px' } }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 2, borderBottom: '1px solid #E5E7EB' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <BookIcon sx={{ fontSize: 20, color: '#2563EB' }} />
+                  <Typography sx={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Source Documents</Typography>
+                </Box>
+                <IconButton size="small" onClick={this.toggleSourcesPanel} sx={{ color: '#6B7280', '&:hover': { bgcolor: '#F3F4F6' } }}>
+                  <CloseIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+                {!lastSourceDocs.length ? (
+                  <Box sx={{ textAlign: 'center', py: 6, color: '#9CA3AF' }}>
+                    <BookIcon sx={{ fontSize: 36, mb: 1, opacity: 0.3 }} />
+                    <Typography sx={{ fontSize: 13 }}>No source documents</Typography>
+                  </Box>
+                ) : lastSourceDocs.map((d, i) => (
+                  <Box key={i} sx={{
+                    display: 'flex', gap: 1.5, p: 1.5, mb: 1, borderRadius: '10px',
+                    border: '1px solid #F3F4F6', '&:hover': { bgcolor: '#F9FAFB' }, transition: 'background 0.15s',
+                  }}>
+                    <DocIcon sx={{ fontSize: 20, color: '#2563EB', mt: 0.25, flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{d.source || 'Document'}</Typography>
+                      {d.similarity != null && (
+                        <Typography sx={{ fontSize: 11, color: '#9CA3AF', mt: 0.25 }}>
+                          Relevance: {(d.similarity * 100).toFixed(1)}%
+                        </Typography>
+                      )}
+                      {d.chunk_text && (
+                        <Typography sx={{ fontSize: 12, color: '#6B7280', mt: 0.5, lineHeight: 1.5 }}>
+                          {d.chunk_text.substring(0, 150)}…
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Drawer>
+          </Box>
+        </Box>
+
+        {/* ─── Letter picker dialog ─── */}
+        <Dialog
+          open={pickerOpen}
+          onClose={this.closeLetterPicker}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden' } }}
+        >
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <DocIcon sx={{ color: '#2563EB' }} />
+              <Typography sx={{ fontWeight: 700, fontSize: 17 }}>Select Letter & Project</Typography>
+            </Box>
+            <IconButton size="small" onClick={this.closeLetterPicker} sx={{ color: '#6B7280' }}>
+              <CloseIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </DialogTitle>
+
+          <Tabs
+            value={pickerTab === 'select' ? 0 : 1}
+            onChange={(_, v) => this.setState({ pickerTab: v === 0 ? 'select' : 'upload' })}
+            sx={{ px: 3, borderBottom: '1px solid #E5E7EB', '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, fontSize: 13.5 } }}
+          >
+            <Tab label="Select Existing" />
+            <Tab label="Upload New" />
+          </Tabs>
+
+          <DialogContent sx={{ pt: 2, pb: 2, minHeight: 320 }}>
+            {pickerTab === 'select' ? (
+              <Box>
+                <TextField
+                  select
+                  size="small"
+                  fullWidth
+                  label="Project"
+                  value={pickerProjectId}
+                  onChange={(e) => this.setState({ pickerProjectId: e.target.value })}
+                  SelectProps={{ native: true }}
+                  sx={{ mb: 2, '& .MuiInputBase-root': { fontSize: 13.5, borderRadius: '10px' } }}
+                >
+                  <option value="">All Projects</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </TextField>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Filter by filename…"
+                  value={pickerSearch}
+                  onChange={(e) => this.setState({ pickerSearch: e.target.value })}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} /></InputAdornment>,
+                    sx: { fontSize: 13.5, borderRadius: '10px' },
+                  }}
+                  sx={{ mb: 2 }}
+                />
+                <Box sx={{ maxHeight: 340, overflow: 'auto' }}>
+                  {!pickerLetters.length ? (
+                    <Box sx={{ textAlign: 'center', py: 5, color: '#9CA3AF' }}>
+                      <DocIcon sx={{ fontSize: 32, mb: 1, opacity: 0.3 }} />
+                      <Typography sx={{ fontSize: 13 }}>No letters found</Typography>
+                    </Box>
+                  ) : pickerLetters.map(l => {
+                    const sel = l.id === this.state.currentLetterId;
+                    return (
+                      <Box
+                        key={l.id}
+                        onClick={() => this.selectLetter(l.id)}
+                        sx={{
+                          display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, mb: 0.5, borderRadius: '10px',
+                          cursor: 'pointer', border: sel ? '1px solid #BFDBFE' : '1px solid transparent',
+                          bgcolor: sel ? '#EFF6FF' : 'transparent',
+                          '&:hover': { bgcolor: sel ? '#EFF6FF' : '#F9FAFB' },
+                          transition: 'all 0.12s',
+                        }}
+                      >
+                        <DocIcon sx={{ fontSize: 20, color: '#2563EB', flexShrink: 0 }} />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {l.filename || 'Letter'}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                            <Chip size="small" label={(l.status || '').replace('_', ' ')}
+                              sx={{ height: 18, fontSize: 10, textTransform: 'capitalize', bgcolor: '#F3F4F6', color: '#6B7280' }} />
+                            {l.category && (
+                              <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>{l.category.replace(/_/g, ' ')}</Typography>
+                            )}
+                          </Box>
+                        </Box>
+                        {sel && <CheckIcon sx={{ fontSize: 18, color: '#2563EB', flexShrink: 0 }} />}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Box>
+            ) : (
+              <Box>
+                <TextField
+                  select
+                  size="small"
+                  fullWidth
+                  label="Project Scope"
+                  value={pickerUploadProjectId}
+                  onChange={(e) => this.setState({ pickerUploadProjectId: e.target.value })}
+                  SelectProps={{ native: true }}
+                  sx={{ mb: 2, '& .MuiInputBase-root': { fontSize: 13.5, borderRadius: '10px' } }}
+                >
+                  <option value="">All Projects / Global</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </TextField>
+                <Box
+                  onClick={() => this.fileInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); this.onPickerFile(e.dataTransfer.files[0]); }}
+                  sx={{
+                    border: '2px dashed #D1D5DB', borderRadius: '14px', py: 5, textAlign: 'center',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    '&:hover': { borderColor: '#2563EB', bgcolor: '#F5F8FF' },
+                  }}
+                >
+                  <UploadIcon sx={{ fontSize: 40, color: '#9CA3AF', mb: 1 }} />
+                  <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#374151', mb: 0.5 }}>
+                    Drop your letter here, or click to browse
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
+                    PDF, DOCX, JPG, PNG · Max 20 MB
+                  </Typography>
+                  <input ref={this.fileInputRef} type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => this.onPickerFile(e.target.files[0])} />
+                </Box>
+                {uploadStatus && (
+                  <Box sx={{ mt: 2, p: 1.5, borderRadius: '10px', bgcolor: uploadStatus.type === 'error' ? '#FEF2F2' : uploadStatus.type === 'loading' ? '#F5F8FF' : '#F0FDF4', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {uploadStatus.type === 'loading' && <CircularProgress size={18} sx={{ color: '#2563EB' }} />}
+                    {uploadStatus.type === 'error' && <CloseIcon sx={{ fontSize: 18, color: '#EF4444' }} />}
+                    {uploadStatus.type === 'success' && <CheckIcon sx={{ fontSize: 18, color: '#16A34A' }} />}
+                    <Typography sx={{ fontSize: 13, color: uploadStatus.type === 'error' ? '#DC2626' : uploadStatus.type === 'loading' ? '#2563EB' : '#16A34A' }}>
+                      {uploadStatus.msg}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Snackbar ─── */}
         <Snackbar
           open={this.state.snackOpen}
           autoHideDuration={4000}
@@ -670,24 +1030,34 @@ class AiDrafting extends React.Component {
             onClose={() => this.setState({ snackOpen: false })}
             severity={this.state.snackSeverity}
             variant="filled"
-            sx={{ width: '100%' }}
+            sx={{ width: '100%', borderRadius: '10px' }}
           >
             {this.state.snackMsg}
           </Alert>
         </Snackbar>
 
+        {/* ─── Delete dialog ─── */}
         <Dialog
           open={this.state.deleteDialogOpen}
           onClose={() => this.setState({ deleteDialogOpen: false, deleteSessionId: null })}
+          PaperProps={{ sx: { borderRadius: '16px', p: 1 } }}
         >
-          <DialogTitle>Delete this drafting conversation?</DialogTitle>
-          <DialogContent>This cannot be undone.</DialogContent>
-          <DialogActions>
-            <Button onClick={() => this.setState({ deleteDialogOpen: false, deleteSessionId: null })}>Cancel</Button>
-            <Button color="error" variant="contained" onClick={this.confirmDeleteSession}>Delete</Button>
+          <DialogTitle sx={{ fontSize: 17, fontWeight: 700 }}>Delete this drafting conversation?</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ fontSize: 14, color: '#6B7280' }}>This cannot be undone.</Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => this.setState({ deleteDialogOpen: false, deleteSessionId: null })}
+              sx={{ textTransform: 'none', borderRadius: '8px', color: '#6B7280' }}>
+              Cancel
+            </Button>
+            <Button color="error" variant="contained" onClick={this.confirmDeleteSession}
+              sx={{ textTransform: 'none', borderRadius: '8px', boxShadow: 'none', '&:hover': { boxShadow: 'none' } }}>
+              Delete
+            </Button>
           </DialogActions>
         </Dialog>
-      </div>
+      </Box>
     );
   }
 }

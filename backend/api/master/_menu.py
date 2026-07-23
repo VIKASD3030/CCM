@@ -19,19 +19,8 @@ _GROUPS = [
     ]),
     (1, "Masters", [
         ("Project", "/master/project-master"),
-        ("Contract", "/master/contract-master"),
-        ("Contractor", "/master/contractor-master"),
-        ("Activity Group", "/master/activity-group-master"),
-        ("Activity", "/master/activity-master"),
-        ("Variation Order", "/master/variation-order-master"),
-        ("Monthly BreakUp", "/master/monthly-breakup-master"),
         ("Department", "/master/department-master"),
         ("Designation", "/master/designation-master"),
-        ("Location", "/master/location-master"),
-        ("Unit", "/master/unit-master"),
-        ("Lookup", "/master/lookup-master"),
-        ("Reference Document", "/master/reference-document-master"),
-        ("Auto Notification", "/master/autonotification-master"),
     ]),
     (2, "Admin", [
         ("User", "/master/user-master"),
@@ -40,9 +29,6 @@ _GROUPS = [
         ("Role Right", "/master/role-right-master"),
         ("Module Group", "/master/module-group-master"),
         ("Module", "/master/module-master"),
-        ("User Logs", "/master/view-user-logs"),
-        ("User Errors", "/master/view-user-errors"),
-        ("Fire Query", "/master/api-test"),
     ]),
 ]
 

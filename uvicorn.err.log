@@ -1,0 +1,15 @@
+INFO:     Started server process [32864]
+INFO:     Waiting for application startup.
+2026-07-22 17:19:49,794 | backend.main                   | INFO    | 2026-07-22T11:49:49.794740Z [info     ] Starting CCM application...    [backend.main]
+2026-07-22 17:19:50,042 | backend.database               | INFO    | 2026-07-22T11:49:50.042590Z [info     ] db.tables_created              [backend.database]
+2026-07-22 17:19:50,110 | backend.db_seed                | INFO    | 2026-07-22T11:49:50.110577Z [info     ] db_seed.rbac_complete          [backend.db_seed]
+2026-07-22 17:19:50,146 | backend.database               | INFO    | 2026-07-22T11:49:50.146234Z [info     ] db.running_migration_001       [backend.database]
+2026-07-22 17:19:50,149 | backend.migrations._001_consolidate_master_data | INFO    | 2026-07-22T11:49:50.149160Z [info     ] migration.001.starting         [backend.migrations._001_consolidate_master_data]
+2026-07-22 17:19:50,155 | backend.migrations._001_consolidate_master_data | INFO    | 2026-07-22T11:49:50.154957Z [info     ] migration.001.master_project_count [backend.migrations._001_consolidate_master_data] count=0
+2026-07-22 17:19:50,171 | backend.migrations._001_consolidate_master_data | INFO    | 2026-07-22T11:49:50.171831Z [info     ] migration.001.reviewer_users_found [backend.migrations._001_consolidate_master_data] count=0
+2026-07-22 17:19:50,180 | backend.migrations._001_consolidate_master_data | INFO    | 2026-07-22T11:49:50.180787Z [info     ] migration.001.reviewer_role_removed [backend.migrations._001_consolidate_master_data]
+2026-07-22 17:19:50,191 | backend.migrations._001_consolidate_master_data | INFO    | 2026-07-22T11:49:50.190992Z [info     ] migration.001.complete         [backend.migrations._001_consolidate_master_data]
+2026-07-22 17:19:50,194 | backend.database               | INFO    | 2026-07-22T11:49:50.194224Z [info     ] db.migration_001_complete      [backend.database]
+2026-07-22 17:19:50,198 | backend.main                   | INFO    | 2026-07-22T11:49:50.198750Z [info     ] Database initialized with pgvector extension [backend.main]
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

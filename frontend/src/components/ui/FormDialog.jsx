@@ -15,7 +15,7 @@ export default function FormDialog({
   title,
   onClose,
   actions,
-  maxWidth = 'sm',
+  maxWidth = 'md',
   fullWidth = true,
   children,
 }) {
@@ -28,16 +28,32 @@ export default function FormDialog({
       slots={{ transition: Transition }}
       scroll="paper"
     >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        {title}
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid #F3F4F6',
+          backgroundColor: '#FAFBFC',
+          px: 3,
+          py: 2.5,
+        }}
+      >
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>{title}</span>
         {onClose && (
-          <IconButton size="small" onClick={onClose} aria-label="Close" sx={{ ml: 2 }}>
+          <IconButton size="small" onClick={onClose} aria-label="Close" sx={{ ml: 2, color: '#9CA3AF' }}>
             <CloseRoundedIcon fontSize="small" />
           </IconButton>
         )}
       </DialogTitle>
-      <DialogContent dividers>{children}</DialogContent>
-      {actions && <DialogActions>{actions}</DialogActions>}
+      <DialogContent dividers sx={{ px: 3, py: 3 }}>
+        {children}
+      </DialogContent>
+      {actions && (
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #F3F4F6', backgroundColor: '#FAFBFC' }}>
+          {actions}
+        </DialogActions>
+      )}
     </Dialog>
   );
 }

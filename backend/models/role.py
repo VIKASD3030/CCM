@@ -16,6 +16,7 @@ class Role(Base):
     stored in RolePermission."""
 
     __tablename__ = "roles"
+    __table_args__ = {"schema": "Master"}
 
     name: Mapped[str] = mapped_column(String(50), primary_key=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

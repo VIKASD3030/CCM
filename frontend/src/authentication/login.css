@@ -1,158 +1,161 @@
+/* ═══════════════════════════════════════════════════════════════
+   Enterprise Login — Premium glassmorphism design
+   Palette: primary #1E3A8A, accent #2563EB, bg #F8FAFC
+   ═══════════════════════════════════════════════════════════════ */
+
 .login-page-container {
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-  background-image: url('./metro-bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 50%, #2563EB 100%);
   position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
+  overflow: hidden;
 }
 
+/* Subtle pattern overlay */
 .login-page-container::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.4);
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: radial-gradient(circle at 25% 25%, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
   z-index: 1;
   pointer-events: none;
 }
 
+/* Floating orbs */
+.login-page-container::after {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59,130,246,0.15), transparent 70%);
+  top: -200px;
+  right: -200px;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .login-card {
-  background: rgba(255, 255, 255, 0.45) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  width: 420px;
-  padding: 40px;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
-  border: none !important;
-  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  width: 440px;
+  padding: 48px 40px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 24px !important;
   text-align: center;
   position: relative;
   z-index: 2;
-
 }
 
 .login-title {
-  font-size: 3.5rem !important;
+  font-size: 28px !important;
   font-weight: 700 !important;
-  color: #262626 !important;
-  letter-spacing: 4px !important;
+  color: #111827 !important;
+  letter-spacing: -0.02em !important;
   margin: 0 !important;
-  line-height: 1 !important;
+  line-height: 1.2 !important;
 }
 
 .login-logo {
-  max-width: 110px;
-  margin-top: 15px;
+  max-width: 100px;
+  margin-top: 12px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
 }
 
 .login-subtitle {
-  font-size: 1.1rem !important;
-  color: #555 !important;
-  margin-top: 15px !important;
-  
-  margin-bottom: 80px !important; 
+  font-size: 14px !important;
+  color: #6B7280 !important;
+  margin-top: 12px !important;
+  margin-bottom: 32px !important;
+  font-weight: 400 !important;
+}
+
+/* Button group */
+.login-button-group {
+  padding-bottom: 8px;
 }
 
 .login-button-group .ant-space-item button {
-  min-width: 120px;
+  min-width: 140px;
   height: 44px;
-  font-size: 1rem;
-  font-weight: 500;
-  border-radius: 22px !important; 
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 12px !important;
+  text-transform: none !important;
+  letter-spacing: 0.01em;
 }
 
 .login-button-group .ant-btn-primary {
-  background-color: #ff5b5b !important;
-  border-color: #ff5b5b !important;
-}
-.login-button-group{
-  padding-bottom: 20px;
+  background: linear-gradient(135deg, #1E3A8A, #2563EB) !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(30, 58, 138, 0.3) !important;
 }
 
 .login-button-group .ant-btn-primary:hover {
-  background-color: #ff3b3b !important;
-  border-color: #ff3b3b !important;
+  background: linear-gradient(135deg, #172554, #1D4ED8) !important;
+  box-shadow: 0 6px 20px rgba(30, 58, 138, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.login-button-group .ant-btn-default {
+  border: 1px solid #E5E7EB !important;
+  color: #374151 !important;
+  background: #fff !important;
 }
 
 .login-button-group .ant-btn-default:hover {
-  color: #ff5b5b !important;
-  border-color: #ff5b5b !important;
+  color: #1E3A8A !important;
+  border-color: #1E3A8A !important;
+  background: #F0F7FF !important;
 }
 
 .login-signup-link {
   margin-top: 20px;
-  font-size: 0.9rem;
-  color: #ff5b5b;
+  font-size: 13px;
+  color: #2563EB;
   text-decoration: none;
+  font-weight: 500;
 }
 
 .login-signup-link:hover {
   text-decoration: underline;
+  color: #1E3A8A;
 }
 
-/* Small devices (Mobile) */
+/* Responsive */
 @media only screen and (max-width: 600px) {
   .login-card {
     width: 90% !important;
-    padding: 20px !important;
+    padding: 32px 24px !important;
+    border-radius: 20px !important;
   }
   .login-title {
-    font-size: 2rem !important;
-    letter-spacing: 2px !important;
-  }
-  .login-subtitle {
-    font-size: 0.9rem !important;
-    margin-bottom: 40px !important;
-  }
-  .login-button-group .ant-space-item button {
-    min-width: 100px;
+    font-size: 22px !important;
   }
 }
 
-/* Medium devices (Tablets) */
 @media only screen and (min-width: 601px) and (max-width: 1024px) {
   .login-card {
-    width: 380px !important;
-    padding: 30px !important;
-  }
-  .login-title {
-    font-size: 2.8rem !important;
-  }
-  .login-subtitle {
-    margin-bottom: 60px !important;
+    width: 400px !important;
+    padding: 40px 32px !important;
   }
 }
 
-/* Large devices (Laptops) */
-@media only screen and (min-width: 1025px) and (max-width: 1440px) {
-  .login-card {
-    width: 420px !important;
-  }
-}
-
-/* 4K devices (Extra Large) */
 @media only screen and (min-width: 2560px) {
   .login-card {
-    width: 500px !important;
-    padding: 60px !important;
+    width: 520px !important;
+    padding: 64px 56px !important;
   }
   .login-title {
-    font-size: 4.5rem !important;
-  }
-  .login-subtitle {
-    font-size: 1.4rem !important;
-    margin-bottom: 100px !important;
-  }
-  .login-button-group .ant-space-item button {
-    min-width: 160px;
-    height: 54px;
-    font-size: 1.2rem;
+    font-size: 36px !important;
   }
 }

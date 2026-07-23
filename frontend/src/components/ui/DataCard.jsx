@@ -1,4 +1,4 @@
-// Card that wraps a data table: header row (title + record count + toolbar) over content.
+// Card shell: header row (title + count + toolbar) over content.
 import React from 'react';
 import Card from '@mui/material/Card';
 import Box from '@mui/material/Box';
@@ -8,22 +8,23 @@ import Chip from '@mui/material/Chip';
 
 export default function DataCard({ title, count, countLabel = 'Records', toolbar, children, sx }) {
   return (
-    <Card sx={{ overflow: 'hidden', ...sx }}>
+    <Card sx={{ overflow: 'hidden', borderRadius: '16px', ...sx }}>
       {(title || toolbar) && (
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 1.5,
+            gap: 2,
             px: 3,
             py: 2,
-            borderBottom: (t) => `1px solid ${t.palette.divider}`,
+            borderBottom: '1px solid #F3F4F6',
+            backgroundColor: '#FAFBFC',
           }}
         >
           <Stack direction="row" alignItems="center" spacing={1.5}>
             {title && (
-              <Typography variant="h4" color="text.primary">
+              <Typography variant="h4" sx={{ color: '#111827', fontWeight: 700, fontSize: 18 }}>
                 {title}
               </Typography>
             )}
@@ -32,9 +33,11 @@ export default function DataCard({ title, count, countLabel = 'Records', toolbar
                 size="small"
                 label={`${count} ${count === 1 ? countLabel.replace(/s$/, '') : countLabel}`}
                 sx={{
-                  bgcolor: 'rgba(47,58,103,0.08)',
-                  color: 'primary.main',
-                  height: 22,
+                  bgcolor: '#EFF6FF',
+                  color: '#1E3A8A',
+                  height: 26,
+                  fontWeight: 600,
+                  fontSize: 12,
                 }}
               />
             )}

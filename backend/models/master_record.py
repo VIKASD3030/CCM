@@ -20,6 +20,7 @@ from backend.database import Base
 
 class MasterRecord(Base):
     __tablename__ = "master_records"
+    __table_args__ = {"schema": "Master"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     entity: Mapped[str] = mapped_column(String(50), index=True, nullable=False)

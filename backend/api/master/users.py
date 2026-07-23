@@ -84,6 +84,11 @@ async def get_user_rights(body: dict[str, Any] = {}, db: AsyncSession = Depends(
     return build_user_rights()
 
 
+@router.get("/getUserRights")
+async def get_user_rights_query(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+    return build_user_rights()
+
+
 @router.post("/GetUserAccessFilters")
 async def get_user_access_filters(body: dict[str, Any] = {}, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
     return await mr_list(db, "user_access_filter", "FilterId")

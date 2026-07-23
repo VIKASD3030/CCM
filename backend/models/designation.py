@@ -6,6 +6,7 @@ from backend.database import Base
 
 class Designation(Base):
     __tablename__ = "designations"
+    __table_args__ = {"schema": "Master"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     code: Mapped[str | None] = mapped_column(String(100), nullable=True)

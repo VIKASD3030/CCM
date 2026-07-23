@@ -15,6 +15,7 @@ class Module(Base):
     """A feature area of the app that RolePermission grants access to."""
 
     __tablename__ = "modules"
+    __table_args__ = {"schema": "Master"}
 
     key: Mapped[str] = mapped_column(String(50), primary_key=True)
     label: Mapped[str] = mapped_column(String(100), nullable=False)

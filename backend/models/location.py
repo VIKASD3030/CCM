@@ -6,6 +6,7 @@ from backend.database import Base
 
 class Location(Base):
     __tablename__ = "locations"
+    __table_args__ = {"schema": "Master"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)

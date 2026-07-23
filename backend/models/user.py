@@ -10,6 +10,7 @@ from backend.database import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {"schema": "Master"}
 
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID, primary_key=True, default=uuid.uuid4
@@ -23,7 +24,7 @@ class User(Base):
     auth_provider: Mapped[str] = mapped_column(String(50), nullable=False, default="password")
     role: Mapped[str] = mapped_column(
         String(20),
-        ForeignKey("roles.name"),
+        ForeignKey("Master.roles.name"),
         nullable=False,
         server_default='drafter'
     )

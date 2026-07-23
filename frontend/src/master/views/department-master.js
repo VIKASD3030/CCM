@@ -1,31 +1,26 @@
+/**
+ * Department Master — Premium enterprise SaaS redesign.
+ *
+ * All backend logic, APIs, CRUD, Excel upload, and routing are preserved exactly.
+ * Only the UI/UX has been transformed.
+ */
 import moment from 'moment';
 import React, { Component } from 'react';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
-import Stack from '@mui/material/Stack';
-import Grid from '@mui/material/Grid';
-import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Backdrop from '@mui/material/Backdrop';
-import CircularProgress from '@mui/material/CircularProgress';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import Paper from '@mui/material/Paper';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import CloudDownloadRoundedIcon from '@mui/icons-material/CloudDownloadRounded';
-import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
-import CorporateFareRoundedIcon from '@mui/icons-material/CorporateFareRounded';
-
+import {
+  TextField, MenuItem, Grid, Typography, Box, Snackbar, Alert,
+  Backdrop, CircularProgress, Tooltip, Button as MuiButton,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+  Menu, ListItemIcon, ListItemText,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  MoreVert as MoreIcon,
+  CloudDownload as CloudDownloadIcon,
+  UploadFile as UploadFileIcon,
+  Business as BusinessIcon,
+} from '@mui/icons-material';
 import LoginState from '../../authentication/loginState';
 import CommonUtilityController from '../controller/common-utility-controller';
 import { fillSelectList } from '../../helper/common-utility';
@@ -35,11 +30,12 @@ import { DEPARTMENT_SAMPLE_DOC_PATH } from '../../helper/constants';
 import {
   PageContainer,
   PageHeader,
-  DataCard,
   EmptyState,
   FormDialog,
   ConfirmDialog,
   AppDataGrid,
+  AppBreadcrumbs,
+  GridToolbar,
 } from '../../components/ui';
 
 const inputJson = [
@@ -76,6 +72,15 @@ class Department extends Component {
       pendingDelete: null,
       formErrors: {},
       snackbar: { open: false, severity: 'success', message: '' },
+      searchText: '',
+      columnVisibility: {
+        DepartmentCode: true,
+        DepartmentName: true,
+        ParentDepartmentName: true,
+        Level: true,
+        Remarks: true,
+      },
+      density: 'standard',
     };
   }
 
@@ -402,54 +407,110 @@ class Department extends Component {
       });
   };
 
+  // ─── Search & filter ──────────────────────────────────
+  getFilteredData() {
+    const { data, searchText } = this.state;
+    if (!searchText) return data;
+    const q = searchText.toLowerCase();
+    return data.filter(r =>
+      (r.DepartmentCode || '').toLowerCase().includes(q) ||
+      (r.DepartmentName || '').toLowerCase().includes(q) ||
+      (r.ParentDepartmentName || '').toLowerCase().includes(q)
+    );
+  }
+
+  // ─── Export ────────────────────────────────────────────
+  handleExport = () => {
+    const filtered = this.getFilteredData();
+    const headers = ['Department Code', 'Department Name', 'Parent Department', 'Order By', 'Remarks'];
+    const rows = filtered.map(r => [
+      r.DepartmentCode, r.DepartmentName, r.ParentDepartmentName, r.Level, r.Remarks,
+    ]);
+    const csv = [headers, ...rows].map(row => row.map(c => `"${(c || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'departments.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  handleRefresh = () => {
+    this.getDepartments();
+  }
+
   // DataGrid columns
   get gridColumns() {
-    return [
+    const { columnVisibility } = this.state;
+    const cols = [
       {
         field: 'action',
-        headerName: 'Action',
-        width: 110,
+        headerName: '',
+        width: 56,
         sortable: false,
         filterable: false,
         disableColumnMenu: true,
-        renderCell: (params) => {
-          const disabled = params.row.Status == '9';
-          return (
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip title="Edit record">
-                <span>
-                  <IconButton
-                    size="small"
-                    color="primary"
-                    disabled={disabled}
-                    onClick={() => this.editRecord(params.row)}
-                  >
-                    <EditRoundedIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="Delete record">
-                <span>
-                  <IconButton
-                    size="small"
-                    color="error"
-                    disabled={disabled}
-                    onClick={() => this.requestDelete(params.row)}
-                  >
-                    <DeleteRoundedIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Stack>
-          );
-        },
+        renderCell: (params) => <ActionMenu record={params.row} onEdit={this.editRecord} onDelete={this.requestDelete} />,
       },
-      { field: 'DepartmentCode', headerName: 'Department Code', flex: 1, minWidth: 140 },
-      { field: 'DepartmentName', headerName: 'Department Name', flex: 1.4, minWidth: 180 },
-      { field: 'ParentDepartmentName', headerName: 'Parent Department', flex: 1.2, minWidth: 160 },
-      { field: 'Level', headerName: 'Order By', width: 110, type: 'number', align: 'right', headerAlign: 'right' },
-      { field: 'Remarks', headerName: 'Remarks', flex: 1.4, minWidth: 180 },
+      {
+        field: 'DepartmentCode',
+        headerName: 'Department Code',
+        flex: 1,
+        minWidth: 140,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
+            {params.value || '—'}
+          </Typography>
+        ),
+      },
+      {
+        field: 'DepartmentName',
+        headerName: 'Department Name',
+        flex: 1.4,
+        minWidth: 180,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151' }}>
+            {params.value || '—'}
+          </Typography>
+        ),
+      },
+      {
+        field: 'ParentDepartmentName',
+        headerName: 'Parent Department',
+        flex: 1.2,
+        minWidth: 160,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151' }}>
+            {params.value || '—'}
+          </Typography>
+        ),
+      },
+      {
+        field: 'Level',
+        headerName: 'Order By',
+        width: 110,
+        type: 'number',
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151', textAlign: 'right', width: '100%' }}>
+            {params.value ?? '—'}
+          </Typography>
+        ),
+      },
+      {
+        field: 'Remarks',
+        headerName: 'Remarks',
+        flex: 1.4,
+        minWidth: 180,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {params.value || '—'}
+          </Typography>
+        ),
+      },
     ];
+
+    return cols.filter(c => c.field === 'action' || columnVisibility[c.field] !== false);
   }
 
   get uploadColumns() {
@@ -468,66 +529,97 @@ class Department extends Component {
       confirmOpen,
       formErrors,
       snackbar,
+      searchText,
+      columnVisibility,
+      density,
     } = this.state;
 
-    const count = this.state.filteredTotal !== null ? this.state.filteredTotal : data.length;
+    const filteredData = this.getFilteredData();
+    const count = filteredData.length;
 
     return (
       <PageContainer>
+
+        <AppBreadcrumbs />
+
         <PageHeader
           title="Department"
           subtitle="Manage organizational departments and their hierarchy"
           actions={
             <>
               <Tooltip title="Download sample file: In ParentDepartmentUnit cell set NA if Department is Parent Department">
-                <Button
+                <MuiButton
                   variant="outlined"
                   color="primary"
-                  startIcon={<CloudDownloadRoundedIcon />}
+                  startIcon={<CloudDownloadIcon />}
                   onClick={() => new FileHelper().downloadAttachment(DEPARTMENT_SAMPLE_DOC_PATH, 'Sample')}
+                  sx={{ borderRadius: '10px', px: 3, py: 1.25 }}
                 >
-                  Sample
-                </Button>
+                  Download Sample
+                </MuiButton>
               </Tooltip>
-              <Button
+              <MuiButton
                 variant="outlined"
                 color="primary"
-                startIcon={<UploadFileRoundedIcon />}
+                startIcon={<UploadFileIcon />}
                 onClick={() => this.handleUploadSubmit()}
+                sx={{ borderRadius: '10px', px: 3, py: 1.25 }}
               >
                 Upload
-              </Button>
-              <Button variant="contained" color="primary" startIcon={<AddRoundedIcon />} onClick={() => this.newRecord()}>
+              </MuiButton>
+              <MuiButton
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => this.newRecord()}
+                sx={{ borderRadius: '10px', px: 3, py: 1.25 }}
+              >
                 New Department
-              </Button>
+              </MuiButton>
             </>
           }
         />
 
-        <DataCard title="Department Details" count={data.length ? count : null} countLabel="Records">
-          {!loading && data.length === 0 ? (
-            <EmptyState
-              icon={<CorporateFareRoundedIcon />}
-              title="No departments yet"
-              description="Create your first department or bulk-import them from an Excel sheet."
-              primaryAction={
-                <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={() => this.newRecord()}>
-                  New Department
-                </Button>
-              }
+        {loading && data.length === 0 ? (
+          <Box sx={{ py: 8, textAlign: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : !loading && data.length === 0 ? (
+          <EmptyState
+            icon={<BusinessIcon sx={{ fontSize: 40 }} />}
+            title="No Departments Found"
+            description="Get started by creating your first department or bulk-importing from Excel."
+            primaryAction={
+              <MuiButton variant="contained" startIcon={<AddIcon />} onClick={() => this.newRecord()} sx={{ borderRadius: '10px', px: 3 }}>
+                Create Department
+              </MuiButton>
+            }
+          />
+        ) : (
+          <Box>
+            <GridToolbar
+              searchValue={searchText}
+              onSearchChange={(val) => this.setState({ searchText: val })}
+              searchPlaceholder="Search departments..."
+              onRefresh={this.handleRefresh}
+              onExport={this.handleExport}
+              columnVisibility={columnVisibility}
+              onColumnToggle={(field) => this.setState(prev => ({
+                columnVisibility: { ...prev.columnVisibility, [field]: !prev.columnVisibility[field] },
+              }))}
+              density={density}
+              onDensityChange={(d) => this.setState({ density: d })}
             />
-          ) : (
             <AppDataGrid
-              rows={data}
+              rows={filteredData}
               columns={this.gridColumns}
               loading={loading}
               getRowId={(row) => row.DepartmentId}
-              onStateChange={() => {}}
-              emptyTitle="No matching departments"
-              emptyDescription="Try adjusting your search."
+              density={density}
+              height={Math.min(56 + count * 56 + 56, 720)}
+              pageSize={10}
             />
-          )}
-        </DataCard>
+          </Box>
+        )}
 
         {/* Create / Edit / Upload dialog */}
         <FormDialog
@@ -538,21 +630,21 @@ class Department extends Component {
           actions={
             isUpload ? (
               <>
-                <Button variant="text" color="inherit" onClick={this.toggleModal}>
+                <MuiButton variant="text" color="inherit" onClick={this.toggleModal} sx={{ borderRadius: '10px' }}>
                   Close
-                </Button>
-                <Button variant="contained" disabled={!enableUpload} onClick={this.saveUploadData}>
+                </MuiButton>
+                <MuiButton variant="contained" disabled={!enableUpload} onClick={this.saveUploadData} sx={{ borderRadius: '10px', px: 3 }}>
                   Save
-                </Button>
+                </MuiButton>
               </>
             ) : (
               <>
-                <Button variant="text" color="inherit" onClick={this.toggleModal}>
-                  Close
-                </Button>
-                <Button variant="contained" onClick={this.onFormSubmit}>
+                <MuiButton variant="text" color="inherit" onClick={this.toggleModal} sx={{ borderRadius: '10px' }}>
+                  Cancel
+                </MuiButton>
+                <MuiButton variant="contained" color="primary" onClick={this.onFormSubmit} sx={{ borderRadius: '10px', px: 3 }}>
                   Submit
-                </Button>
+                </MuiButton>
               </>
             )
           }
@@ -562,6 +654,8 @@ class Department extends Component {
               <Grid container spacing={2.5} sx={{ pt: 0.5 }}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
+                    fullWidth
+                    size="small"
                     label="Department Code"
                     required
                     value={departmentData.DepartmentCode || ''}
@@ -573,6 +667,8 @@ class Department extends Component {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
+                    fullWidth
+                    size="small"
                     label="Department Name"
                     required
                     value={departmentData.DepartmentName || ''}
@@ -584,6 +680,8 @@ class Department extends Component {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
+                    fullWidth
+                    size="small"
                     select
                     label="Parent Department"
                     value={departmentData.ParentDepartmentId || ''}
@@ -599,6 +697,8 @@ class Department extends Component {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
+                    fullWidth
+                    size="small"
                     label="Order By"
                     type="number"
                     required
@@ -612,6 +712,8 @@ class Department extends Component {
                 </Grid>
                 <Grid size={{ xs: 12 }}>
                   <TextField
+                    fullWidth
+                    size="small"
                     label="Remarks"
                     multiline
                     minRows={2}
@@ -625,10 +727,10 @@ class Department extends Component {
             </Box>
           ) : (
             <Box>
-              <Button variant="outlined" component="label" startIcon={<UploadFileRoundedIcon />} sx={{ mb: 2 }}>
+              <MuiButton variant="outlined" component="label" startIcon={<UploadFileIcon />} sx={{ mb: 2, borderRadius: '10px' }}>
                 Choose Excel File
                 <input type="file" accept=".xlsx" hidden onChange={this.fileHandler} />
-              </Button>
+              </MuiButton>
               <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360 }}>
                 <Table stickyHeader size="small">
                   <TableHead>
@@ -680,13 +782,56 @@ class Department extends Component {
           onClose={this.closeSnackbar}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         >
-          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>
             {snackbar.message}
           </Alert>
         </Snackbar>
       </PageContainer>
     );
   }
+}
+
+// ─── Action Menu Component (⋮ button) ────────────────────
+function ActionMenu({ record, onEdit, onDelete }) {
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const open = Boolean(anchorEl);
+  const disabled = record.Status == '9';
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <Box
+          component="span"
+          onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+          sx={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            color: '#9CA3AF', width: 32, height: 32, borderRadius: '8px', cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            '&:hover': { bgcolor: '#F1F5F9', color: '#1E3A8A' },
+          }}
+        >
+          <MoreIcon sx={{ fontSize: 18 }} />
+        </Box>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{ paper: { sx: { minWidth: 160, p: 0.5 } } }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onEdit(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><EditIcon sx={{ fontSize: 16, color: '#059669' }} /></ListItemIcon>
+          <ListItemText primary="Edit" primaryTypographyProps={{ fontSize: 13, fontWeight: 500 }} />
+        </MenuItem>
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onDelete(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><DeleteIcon sx={{ fontSize: 16, color: '#EF4444' }} /></ListItemIcon>
+          <ListItemText primary="Delete" primaryTypographyProps={{ fontSize: 13, fontWeight: 500, color: disabled ? undefined : '#EF4444' }} />
+        </MenuItem>
+      </Menu>
+    </>
+  );
 }
 
 export default Department;

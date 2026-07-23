@@ -39,6 +39,17 @@ async def get_module_groups(moduleGroupId: int = Query(0), db: AsyncSession = De
     return await mr_list(db, GRP, GRP_ID, filters)
 
 
+@router.post("/getModuleGroups")
+async def get_module_groups_post(body: dict[str, Any] = {}, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+    module_group_id = body.get("moduleGroupId") or body.get("ModuleGroupId") or 0
+    try:
+        module_group_id = int(module_group_id)
+    except (TypeError, ValueError):
+        module_group_id = 0
+    filters = {GRP_ID: module_group_id} if module_group_id else None
+    return await mr_list(db, GRP, GRP_ID, filters)
+
+
 @router.post("/saveModuleGroupDetails")
 async def save_module_group(body: dict[str, Any], db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
     return await mr_save(db, GRP, GRP_ID, body)

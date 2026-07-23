@@ -22,10 +22,10 @@ class RolePermission(Base):
         PG_UUID, primary_key=True, default=uuid.uuid4
     )
     role_name: Mapped[str] = mapped_column(
-        String(50), ForeignKey("roles.name", ondelete="CASCADE"), nullable=False
+        String(50), ForeignKey("Master.roles.name", ondelete="CASCADE"), nullable=False
     )
     module_key: Mapped[str] = mapped_column(
-        String(50), ForeignKey("modules.key", ondelete="CASCADE"), nullable=False
+        String(50), ForeignKey("Master.modules.key", ondelete="CASCADE"), nullable=False
     )
     can_view: Mapped[bool] = mapped_column(Boolean, default=False)
     can_create: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -38,6 +38,7 @@ class RolePermission(Base):
 
     __table_args__ = (
         UniqueConstraint("role_name", "module_key", name="uq_role_permissions_role_module"),
+        {"schema": "Master"},
     )
 
     def to_dict(self):

@@ -1,22 +1,20 @@
 import React, { Component } from 'react';
 import moment from 'moment';
-import Button from '@mui/material/Button';
-import Box from '@mui/material/Box';
-import Stack from '@mui/material/Stack';
-import Grid from '@mui/material/Grid';
-import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
-import Typography from '@mui/material/Typography';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
+import {
+  TextField, MenuItem, Grid, Box, Typography,
+  Snackbar, Alert, Button as MuiButton, Stack,
+} from '@mui/material';
+import {
+  Save as SaveIcon,
+  VpnKey as VpnKeyIcon,
+} from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import { fillSelectList } from '../../helper/common-utility';
 import CommonUtilityController from '../controller/common-utility-controller';
 import LoginState from '../../authentication/loginState';
-import { PageContainer, PageHeader, DataCard } from '../../components/ui';
-
-const requiredChildFields = [];
+import {
+  PageContainer, PageHeader, EmptyState, AppBreadcrumbs, GridToolbar,
+} from '../../components/ui';
 
 class RoleRight extends Component {
   constructor(props) {
@@ -32,6 +30,7 @@ class RoleRight extends Component {
       childData: [],
       selectedModuleGroups: [],
       snackbar: { open: false, severity: 'success', message: '' },
+      searchText: '',
     };
   }
 
@@ -119,76 +118,154 @@ class RoleRight extends Component {
       .catch((error) => { this.setState({ loading: false }); this.notify('error', error.toString()); });
   };
 
+  handleRefresh = () => {
+    const { role } = this.state;
+    if (role.RoleId) this.getRoleRightDetails(role.RoleId);
+  };
+
+  handleExport = () => {
+    const { childData } = this.state;
+    const headers = ['Module', 'Module Group', 'Main Module Group'];
+    const rows = childData.map((r) => [r.UserShownName, r.ModuleGroupName, r.ParentModuleGroupName]);
+    const csv = [headers, ...rows].map((row) => row.map((c) => `"${(c || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'role-rights.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  getFilteredChildData() {
+    const { childData, searchText } = this.state;
+    if (!searchText) return childData;
+    const q = searchText.toLowerCase();
+    return childData.filter((r) =>
+      (r.UserShownName || '').toLowerCase().includes(q) ||
+      (r.ModuleGroupName || '').toLowerCase().includes(q) ||
+      (r.ParentModuleGroupName || '').toLowerCase().includes(q)
+    );
+  }
+
   childColumns = [
-    { field: 'UserShownName', headerName: 'Module', flex: 1, minWidth: 160 },
-    { field: 'ModuleGroupName', headerName: 'Module Group', flex: 1.2, minWidth: 160 },
-    { field: 'ParentModuleGroupName', headerName: 'Main Module Group', flex: 1.2, minWidth: 180 },
+    {
+      field: 'UserShownName', headerName: 'Module', flex: 1, minWidth: 160,
+      renderCell: (params) => (
+        <Typography sx={{ fontSize: 13, color: '#374151' }}>{params.value || '—'}</Typography>
+      ),
+    },
+    {
+      field: 'ModuleGroupName', headerName: 'Module Group', flex: 1.2, minWidth: 160,
+      renderCell: (params) => (
+        <Typography sx={{ fontSize: 13, color: '#374151' }}>{params.value || '—'}</Typography>
+      ),
+    },
+    {
+      field: 'ParentModuleGroupName', headerName: 'Main Module Group', flex: 1.2, minWidth: 180,
+      renderCell: (params) => (
+        <Typography sx={{ fontSize: 13, color: '#374151' }}>{params.value || '—'}</Typography>
+      ),
+    },
   ];
 
   render() {
-    const { role, roleList, moduleGroupList, loading, childData, selectedRowKeys, selectedModuleGroups, snackbar } = this.state;
+    const { role, roleList, moduleGroupList, loading, childData, selectedRowKeys, selectedModuleGroups, snackbar, searchText } = this.state;
+    const filteredChildData = this.getFilteredChildData();
+
+    const hasData = role.RoleId && filteredChildData.length > 0;
+    const noRoleSelected = !role.RoleId;
+
     return (
       <PageContainer>
+        <AppBreadcrumbs />
+
         <PageHeader title="Role Right" subtitle="Assign module rights to roles" />
 
-        <DataCard title="Role Right Details" sx={{ mb: 2 }}>
-          <Box sx={{ p: 2 }}>
-            <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField select size="small" label="Role Name" required fullWidth
-                  value={role.RoleId || ''} onChange={(e) => this.roleChange(e.target.value)}>
-                  <MenuItem value="">Select....</MenuItem>
-                  {roleList.map((r) => <MenuItem key={r.RoleId} value={r.RoleId}>{r.RoleName}</MenuItem>)}
-                </TextField>
+        {noRoleSelected && !loading ? (
+          <EmptyState
+            icon={<VpnKeyIcon sx={{ fontSize: 40 }} />}
+            title="Select a Role"
+            description="Choose a role from the dropdown to manage its module rights."
+          />
+        ) : (
+          <Box>
+            <Box sx={{
+              border: '1px solid #E5E7EB',
+              borderRadius: '12px',
+              p: 3,
+              mb: 3,
+              bgcolor: '#FFFFFF',
+            }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField select size="small" label="Role Name" required fullWidth
+                    value={role.RoleId || ''} onChange={(e) => this.roleChange(e.target.value)}>
+                    <MenuItem value="">Select....</MenuItem>
+                    {roleList.map((r) => <MenuItem key={r.RoleId} value={r.RoleId}>{r.RoleName}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField select size="small" label="Module Group Filter" fullWidth
+                    SelectProps={{ multiple: true }}
+                    value={selectedModuleGroups}
+                    onChange={(e) => this.moduleGroupChange(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}>
+                    {moduleGroupList.map((mg) => <MenuItem key={mg.ModuleGroupId} value={mg.ModuleGroupName}>{mg.ModuleGroupName}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
+                    <MuiButton
+                      variant="contained"
+                      startIcon={<SaveIcon />}
+                      onClick={this.saveData}
+                      disabled={!role.RoleId}
+                      sx={{ borderRadius: '10px', px: 3, py: 1.25 }}
+                    >
+                      Save
+                    </MuiButton>
+                  </Box>
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField select size="small" label="Module Group Filter" fullWidth
-                  SelectProps={{ multiple: true }}
-                  value={selectedModuleGroups}
-                  onChange={(e) => this.moduleGroupChange(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}>
-                  {moduleGroupList.map((mg) => <MenuItem key={mg.ModuleGroupId} value={mg.ModuleGroupName}>{mg.ModuleGroupName}</MenuItem>)}
-                </TextField>
-              </Grid>
-            </Grid>
+            </Box>
 
             {selectedRowKeys.length > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, ml: 0.5 }}>
                 {selectedRowKeys.length} item{selectedRowKeys.length !== 1 ? 's' : ''} selected
               </Typography>
             )}
 
-            <Box sx={{ height: 500, width: '100%' }}>
-              <DataGrid
-                rows={childData}
-                columns={this.childColumns}
-                loading={loading}
-                getRowId={(row) => row.ModuleId?.toString() || row.key}
-                checkboxSelection
-                rowSelectionModel={selectedRowKeys}
-                onRowSelectionModelChange={(newSelection) => this.setState({ selectedRowKeys: newSelection })}
-                disableRowSelectionOnClick
-                showToolbar
-                pageSizeOptions={[10, 20, 50, 100]}
-                initialState={{ pagination: { paginationModel: { pageSize: 20 } } }}
-                sx={{
-                  border: 'none',
-                  '& .MuiDataGrid-columnHeaders': { backgroundColor: '#F3F5FA' },
-                  '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 600, color: 'primary.main', fontSize: 13 },
-                }}
+            <Box>
+              <GridToolbar
+                searchValue={searchText}
+                onSearchChange={(val) => this.setState({ searchText: val })}
+                searchPlaceholder="Search modules..."
+                onRefresh={this.handleRefresh}
+                onExport={this.handleExport}
               />
+              <Box sx={{ height: 500, width: '100%' }}>
+                <DataGrid
+                  rows={filteredChildData}
+                  columns={this.childColumns}
+                  loading={loading}
+                  getRowId={(row) => row.ModuleId?.toString() || row.key}
+                  checkboxSelection
+                  rowSelectionModel={selectedRowKeys}
+                  onRowSelectionModelChange={(newSelection) => this.setState({ selectedRowKeys: newSelection })}
+                  disableRowSelectionOnClick
+                  pageSizeOptions={[10, 20, 50, 100]}
+                  initialState={{ pagination: { paginationModel: { pageSize: 20 } } }}
+                  sx={{
+                    border: 'none',
+                    '& .MuiDataGrid-columnHeaders': { backgroundColor: '#F3F5FA' },
+                    '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 600, color: 'primary.main', fontSize: 13 },
+                  }}
+                />
+              </Box>
             </Box>
-
-            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-              <Button variant="contained" startIcon={<SaveRoundedIcon />} onClick={this.saveData}
-                disabled={!role.RoleId}>
-                Save
-              </Button>
-            </Stack>
           </Box>
-        </DataCard>
+        )}
 
         <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={this.closeSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>{snackbar.message}</Alert>
+          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>{snackbar.message}</Alert>
         </Snackbar>
       </PageContainer>
     );

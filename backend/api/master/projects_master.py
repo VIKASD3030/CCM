@@ -23,6 +23,11 @@ async def get_projects(body: dict[str, Any] = {}, db: AsyncSession = Depends(get
     return await mr_list(db, ENTITY, ID)
 
 
+@router.get("/getProjects")
+async def get_projects_query(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+    return await mr_list(db, ENTITY, ID)
+
+
 @router.post("/getProjectDetails")
 async def get_project_details(body: dict[str, Any] = {}, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
     filters = {ID: body.get("ProjectMasterId")} if body.get("ProjectMasterId") else None

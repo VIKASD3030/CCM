@@ -71,6 +71,11 @@ async def get_departments(db: AsyncSession = Depends(get_db), _: User = Depends(
     return await refresh_list(db, Department, order_col=Department.id)
 
 
+@router.post("/getDepartments")
+async def get_departments_post(body: dict[str, Any] = {}, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+    return await refresh_list(db, Department, order_col=Department.id)
+
+
 @router.post("/saveDepartmentDetails")
 async def save_department(body: dict[str, Any], db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
     await upsert_model(db, Department, body, "DepartmentId", DEPT_MAP)
@@ -127,6 +132,11 @@ DESIG_MAP = {
 
 @router.get("/getDesignations")
 async def get_designations(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+    return await refresh_list(db, Designation, order_col=Designation.id)
+
+
+@router.post("/getDesignations")
+async def get_designations_post(body: dict[str, Any] = {}, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
     return await refresh_list(db, Designation, order_col=Designation.id)
 
 

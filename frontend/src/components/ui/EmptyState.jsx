@@ -10,35 +10,35 @@ export default function EmptyState({ icon, title = 'No data yet', description, p
     <Stack
       alignItems="center"
       justifyContent="center"
-      spacing={1}
-      sx={{ width: '100%', height: '100%', py: 7, px: 3, textAlign: 'center' }}
+      spacing={1.5}
+      sx={{ width: '100%', height: '100%', py: 8, px: 3, textAlign: 'center' }}
     >
       <Box
         sx={{
-          width: 72,
-          height: 72,
-          borderRadius: '50%',
+          width: 80,
+          height: 80,
+          borderRadius: '20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          bgcolor: 'rgba(47,58,103,0.06)',
-          color: 'primary.main',
+          background: 'linear-gradient(135deg, #EFF6FF, #DBEAFE)',
+          color: '#1E3A8A',
           mb: 1,
-          '& svg': { fontSize: 34 },
+          '& svg': { fontSize: 36 },
         }}
       >
         {icon || <InboxRoundedIcon />}
       </Box>
-      <Typography variant="h5" color="text.primary">
+      <Typography variant="h4" sx={{ color: '#111827', fontWeight: 700, fontSize: 20 }}>
         {title}
       </Typography>
       {description && (
-        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 340 }}>
+        <Typography variant="body1" sx={{ color: '#6B7280', maxWidth: 400, lineHeight: 1.6, fontSize: 15 }}>
           {description}
         </Typography>
       )}
       {(primaryAction || secondaryAction) && (
-        <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
+        <Stack direction="row" spacing={1.5} sx={{ mt: 1.5 }}>
           {primaryAction}
           {secondaryAction}
         </Stack>

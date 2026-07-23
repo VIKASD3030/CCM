@@ -8,4 +8,6 @@ export { default as StatCard } from './StatCard';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as FormDialog } from './FormDialog';
 export { default as AppDataGrid } from './AppDataGrid';
+export { default as AppBreadcrumbs } from './Breadcrumbs';
+export { default as GridToolbar } from './GridToolbar';
 export { TableSkeleton, FormSkeleton, CardsSkeleton } from './Skeletons';

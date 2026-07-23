@@ -7,7 +7,7 @@ import LoginState from '../../authentication/loginState';
 class BaseController extends React.Component {
   constructor(props) {
     super(props);
-    this.baseUrl = config.apiUrl;
+    this.baseUrl = config.apiUrl || '';
   }
 
   getToken = () => {

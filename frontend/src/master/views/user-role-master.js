@@ -1,20 +1,28 @@
+/**
+ * User Role Master — Premium enterprise SaaS redesign.
+ *
+ * All backend logic, APIs, CRUD, and routing are preserved exactly.
+ * Only the UI/UX has been transformed.
+ */
 import moment from 'moment';
 import React, { Component } from 'react';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
-import Stack from '@mui/material/Stack';
-import Grid from '@mui/material/Grid';
-import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import {
+  TextField, MenuItem, Grid, Typography, Box, Snackbar, Alert,
+  CircularProgress, Tooltip, Button as MuiButton, Menu, ListItemIcon, ListItemText,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  MoreVert as MoreIcon,
+  Assignment as AssignmentIcon,
+} from '@mui/icons-material';
 import LoginState from '../../authentication/loginState';
 import CommonUtilityController from '../controller/common-utility-controller';
-import { PageContainer, PageHeader, DataCard, AppDataGrid, FormDialog, ConfirmDialog } from '../../components/ui';
+import {
+  PageContainer, PageHeader, EmptyState, AppDataGrid, FormDialog, ConfirmDialog,
+  AppBreadcrumbs, GridToolbar,
+} from '../../components/ui';
 
 const emptyUserRole = { UserRoleId: 0, UserId: '', RoleId: '', Status: 0 };
 
@@ -37,6 +45,12 @@ class UserRole extends Component {
       pendingDelete: null,
       formErrors: {},
       snackbar: { open: false, severity: 'success', message: '' },
+      searchText: '',
+      columnVisibility: {
+        UserName: true,
+        RoleName: true,
+      },
+      density: 'standard',
     };
   }
 
@@ -136,71 +150,181 @@ class UserRole extends Component {
       .catch(() => { this.setState({ loading: false }); this.notify('error', 'Data insertion issue!'); });
   };
 
+  // ─── Search & filter ──────────────────────────────────
+  getFilteredData() {
+    const { data, searchText } = this.state;
+    if (!searchText) return data;
+    const q = searchText.toLowerCase();
+    return data.filter(r =>
+      (r.UserName || '').toLowerCase().includes(q) ||
+      (r.RoleName || '').toLowerCase().includes(q)
+    );
+  }
+
+  // ─── Export ────────────────────────────────────────────
+  handleExport = () => {
+    const filtered = this.getFilteredData();
+    const headers = ['User Name', 'Role Name'];
+    const rows = filtered.map(r => [r.UserName, r.RoleName]);
+    const csv = [headers, ...rows].map(row => row.map(c => `"${(c || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'user-roles.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  handleRefresh = () => {
+    this.getUserRoles();
+  }
+
   get gridColumns() {
-    return [
+    const { columnVisibility } = this.state;
+    const cols = [
       {
-        field: 'action', headerName: 'Action', width: 110, sortable: false, filterable: false, disableColumnMenu: true,
-        renderCell: (params) => {
-          const disabled = params.row.Status == '9';
-          return (
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip title="Edit"><span><IconButton size="small" color="primary" disabled={disabled} onClick={() => this.editRecord(params.row)}><EditRoundedIcon fontSize="small" /></IconButton></span></Tooltip>
-              <Tooltip title="Delete"><span><IconButton size="small" color="error" disabled={disabled} onClick={() => this.requestDelete(params.row)}><DeleteRoundedIcon fontSize="small" /></IconButton></span></Tooltip>
-            </Stack>
-          );
-        },
+        field: 'action',
+        headerName: '',
+        width: 56,
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => <ActionMenu record={params.row} onEdit={this.editRecord} onDelete={this.requestDelete} />,
       },
-      { field: 'UserName', headerName: 'User Name', flex: 1.4, minWidth: 180 },
-      { field: 'RoleName', headerName: 'Role Name', flex: 1.4, minWidth: 180 },
+      {
+        field: 'UserName',
+        headerName: 'User Name',
+        flex: 1.4,
+        minWidth: 180,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
+            {params.value || '—'}
+          </Typography>
+        ),
+      },
+      {
+        field: 'RoleName',
+        headerName: 'Role Name',
+        flex: 1.4,
+        minWidth: 180,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151' }}>
+            {params.value || '—'}
+          </Typography>
+        ),
+      },
     ];
+
+    return cols.filter(c => c.field === 'action' || columnVisibility[c.field] !== false);
   }
 
   render() {
-    const { data, loading, visible, userRoleData, userList, roleList, projectList, businessUnitList, businessLineList, confirmOpen, formErrors, snackbar } = this.state;
-    const count = this.state.filteredTotal !== null ? this.state.filteredTotal : data.length;
+    const { data, loading, visible, userRoleData, userList, roleList, projectList, businessUnitList, businessLineList, confirmOpen, formErrors, snackbar, searchText, columnVisibility, density } = this.state;
+    const filteredData = this.getFilteredData();
+    const count = filteredData.length;
+
     return (
       <PageContainer>
-        <PageHeader title="User Role" subtitle="Manage user role assignments"
-          actions={<Button variant="contained" startIcon={<AddRoundedIcon />} onClick={this.newRecord}>New User Role</Button>}
+
+        <AppBreadcrumbs />
+
+        <PageHeader
+          title="User Role"
+          subtitle="Manage user role assignments"
+          actions={
+            <MuiButton
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={this.newRecord}
+              sx={{ borderRadius: '10px', px: 3, py: 1.25 }}
+            >
+              New User Role
+            </MuiButton>
+          }
         />
-        <DataCard title="User Role Details" count={data.length ? count : null} countLabel="Records">
-          <AppDataGrid rows={data} columns={this.gridColumns} loading={loading} getRowId={(row) => row.UserRoleId}
-            emptyTitle="No user roles yet" emptyDescription="Create your first user role assignment."
-            emptyAction={<Button variant="contained" startIcon={<AddRoundedIcon />} onClick={this.newRecord}>New User Role</Button>}
+
+        {loading && data.length === 0 ? (
+          <Box sx={{ py: 8, textAlign: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : !loading && data.length === 0 ? (
+          <EmptyState
+            icon={<AssignmentIcon sx={{ fontSize: 40 }} />}
+            title="No User Roles Found"
+            description="Get started by creating your first user role assignment."
+            primaryAction={
+              <MuiButton variant="contained" startIcon={<AddIcon />} onClick={this.newRecord} sx={{ borderRadius: '10px', px: 3 }}>
+                Create User Role
+              </MuiButton>
+            }
           />
-        </DataCard>
+        ) : (
+          <Box>
+            <GridToolbar
+              searchValue={searchText}
+              onSearchChange={(val) => this.setState({ searchText: val })}
+              searchPlaceholder="Search user roles..."
+              onRefresh={this.handleRefresh}
+              onExport={this.handleExport}
+              columnVisibility={columnVisibility}
+              onColumnToggle={(field) => this.setState(prev => ({
+                columnVisibility: { ...prev.columnVisibility, [field]: !prev.columnVisibility[field] },
+              }))}
+              density={density}
+              onDensityChange={(d) => this.setState({ density: d })}
+            />
+            <AppDataGrid
+              rows={filteredData}
+              columns={this.gridColumns}
+              loading={loading}
+              getRowId={(row) => row.UserRoleId}
+              density={density}
+              height={Math.min(56 + count * 56 + 56, 720)}
+              pageSize={10}
+            />
+          </Box>
+        )}
+
         <FormDialog open={visible} onClose={this.toggleModal} title="User Role Details" maxWidth="sm"
-          actions={<><Button variant="text" color="inherit" onClick={this.toggleModal}>Close</Button><Button variant="contained" onClick={this.onFormSubmit}>Submit</Button></>}
+          actions={
+            <>
+              <MuiButton variant="text" color="inherit" onClick={this.toggleModal} sx={{ borderRadius: '10px' }}>
+                Cancel
+              </MuiButton>
+              <MuiButton variant="contained" color="primary" onClick={this.onFormSubmit} sx={{ borderRadius: '10px', px: 3 }}>
+                Submit
+              </MuiButton>
+            </>
+          }
         >
           <Grid container spacing={2.5} sx={{ pt: 0.5 }}>
             <Grid size={{ xs: 12 }}>
-              <TextField select label="User" required value={userRoleData.UserId || ''} onChange={this.handleField('UserId')} error={!!formErrors.UserId} helperText={formErrors.UserId}>
+              <TextField fullWidth size="small" select label="User" required value={userRoleData.UserId || ''} onChange={this.handleField('UserId')} error={!!formErrors.UserId} helperText={formErrors.UserId}>
                 <MenuItem value="">Select....</MenuItem>
                 {userList.map((u) => <MenuItem key={u.UserId} value={u.UserId}>{u.EmployeeName}</MenuItem>)}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <TextField select label="Role" required value={userRoleData.RoleId || ''} onChange={this.handleField('RoleId')} error={!!formErrors.RoleId} helperText={formErrors.RoleId}>
+              <TextField fullWidth size="small" select label="Role" required value={userRoleData.RoleId || ''} onChange={this.handleField('RoleId')} error={!!formErrors.RoleId} helperText={formErrors.RoleId}>
                 <MenuItem value="">Select....</MenuItem>
                 {roleList.map((r) => <MenuItem key={r.RoleId} value={r.RoleId}>{r.RoleName}</MenuItem>)}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <TextField select label="Business Unit" SelectProps={{ multiple: true }}
+              <TextField fullWidth size="small" select label="Business Unit" SelectProps={{ multiple: true }}
                 value={userRoleData.BusinessUnitIds || []}
                 onChange={this.handleMultiField('BusinessUnitIds')}>
                 {businessUnitList.map((b) => <MenuItem key={b.LookupId} value={b.LookupName}>{b.LookupName}</MenuItem>)}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <TextField select label="Business Line" SelectProps={{ multiple: true }}
+              <TextField fullWidth size="small" select label="Business Line" SelectProps={{ multiple: true }}
                 value={userRoleData.BusinessLineIds || []}
                 onChange={this.handleMultiField('BusinessLineIds')}>
                 {businessLineList.map((b) => <MenuItem key={b.LookupId} value={b.LookupName}>{b.LookupName}</MenuItem>)}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <TextField select label="Project" SelectProps={{ multiple: true }}
+              <TextField fullWidth size="small" select label="Project" SelectProps={{ multiple: true }}
                 value={userRoleData.ProjectIds || []}
                 onChange={this.handleMultiField('ProjectIds')}>
                 {projectList.map((p) => <MenuItem key={p.ProjectMasterId} value={p.ProjectMasterId}>{p.ProjectName}</MenuItem>)}
@@ -208,13 +332,58 @@ class UserRole extends Component {
             </Grid>
           </Grid>
         </FormDialog>
+
         <ConfirmDialog open={confirmOpen} title="Delete user role?" message="Are you sure you want to delete this record?" confirmText="Delete" onConfirm={this.confirmDelete} onCancel={this.cancelDelete} />
+
         <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={this.closeSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>{snackbar.message}</Alert>
+          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>{snackbar.message}</Alert>
         </Snackbar>
       </PageContainer>
     );
   }
+}
+
+// ─── Action Menu Component (⋮ button) ────────────────────
+function ActionMenu({ record, onEdit, onDelete }) {
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const open = Boolean(anchorEl);
+  const disabled = record.Status == '9';
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <Box
+          component="span"
+          onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+          sx={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            color: '#9CA3AF', width: 32, height: 32, borderRadius: '8px', cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            '&:hover': { bgcolor: '#F1F5F9', color: '#1E3A8A' },
+          }}
+        >
+          <MoreIcon sx={{ fontSize: 18 }} />
+        </Box>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{ paper: { sx: { minWidth: 160, p: 0.5 } } }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onEdit(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><EditIcon sx={{ fontSize: 16, color: '#059669' }} /></ListItemIcon>
+          <ListItemText primary="Edit" primaryTypographyProps={{ fontSize: 13, fontWeight: 500 }} />
+        </MenuItem>
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onDelete(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><DeleteIcon sx={{ fontSize: 16, color: '#EF4444' }} /></ListItemIcon>
+          <ListItemText primary="Delete" primaryTypographyProps={{ fontSize: 13, fontWeight: 500, color: disabled ? undefined : '#EF4444' }} />
+        </MenuItem>
+      </Menu>
+    </>
+  );
 }
 
 export default UserRole;

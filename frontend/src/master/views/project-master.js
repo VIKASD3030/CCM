@@ -1,77 +1,124 @@
+/**
+ * Project Master — Premium enterprise SaaS redesign.
+ * Design reference: Azure Portal + Linear + GitHub Projects.
+ *
+ * All backend logic, APIs, CRUD, file upload, and routing are preserved exactly.
+ * Only the UI/UX has been transformed.
+ */
 import moment from 'moment';
 import React, { Component } from 'react';
-import { TextField, MenuItem, Grid, Typography, Tabs, Tab, Divider, Backdrop, CircularProgress } from '@mui/material';
-import MuiButton from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
-import Stack from '@mui/material/Stack';
-import Box from '@mui/material/Box';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
-import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
-import './project-master.css';
+import {
+  TextField, MenuItem, Grid, Typography, Tabs, Tab, Divider,
+  Backdrop, CircularProgress, Box, Snackbar, Alert, Avatar,
+  Tooltip, IconButton, Chip, Stack, Button as MuiButton,
+  Menu, ListItemIcon, ListItemText,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Visibility as ViewIcon,
+  MoreVert as MoreIcon,
+  FolderOpen as FolderIcon,
+  Business as BusinessIcon,
+} from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import LoginState from '../../authentication/loginState';
 import FileViewer from '../../helper/file-viewer';
-import CommonUtilityController from "../controller/common-utility-controller";
+import CommonUtilityController from '../controller/common-utility-controller';
 import { fillSelectList } from '../../helper/common-utility';
 import FileHelper from '../../helper/file-helper';
 import { SIGN_FILE_PROP } from '../../helper/constants';
 import FileUpload from '../common/quality-file-upload';
-import path from "path-browserify";
-import { PageContainer, PageHeader, DataCard, EmptyState, FormDialog, ConfirmDialog, AppDataGrid } from '../../components/ui';
+import path from 'path-browserify';
+import {
+  PageContainer, PageHeader, EmptyState, FormDialog, ConfirmDialog,
+  AppDataGrid, AppBreadcrumbs, GridToolbar,
+} from '../../components/ui';
+import './project-master.css';
+
 const ProjectAtt_Api = '/common/SaveProjectAttachment';
 
+// ─── Helpers ──────────────────────────────────────────────
+function getInitials(name) {
+  if (!name) return '?';
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function stringToColor(str) {
+  if (!str) return '#6B7280';
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  const colors = ['#1E3A8A', '#7C3AED', '#059669', '#D97706', '#DC2626', '#2563EB', '#0891B2', '#4F46E5'];
+  return colors[Math.abs(hash) % colors.length];
+}
+
+// ─── Component ────────────────────────────────────────────
 class Project extends Component {
 
   constructor(props) {
     super(props);
     this.state = {
+      // data
       data: [],
       originalData: [],
       projectData: {
-        ProjectMasterId: 0,
-        ProjectCode: "",
-        ProjectName: "",
-        ClientName: "",
-        BusinessUnit: "",
-        BusinessLine: "",
-        ProjectManagerId: "",
-        ProjectDirectorId: "",
-        PMOID: "",
-        Remarks: "",
-        Status: 0,
+        ProjectMasterId: 0, ProjectCode: '', ProjectName: '', ClientName: '',
+        BusinessUnit: '', BusinessLine: '', ProjectManagerId: '',
+        ProjectDirectorId: '', PMOID: '', Remarks: '', Status: 0,
       },
       imageFileUrl: '',
+
+      // ui state
       loading: false,
       visible: false,
       viewProject: false,
-      projectList: [],
-      projectParentList: [],
-      businessUnitList: [],
-      businessLineList: [],
-      userList: [],
-      currentUserList: [],
+      editable: false,
       isUpload: false,
-      filteredTotal: null,
       viewDoc: false,
       fileType: '',
       filePath: '',
       confirmOpen: false,
       pendingDelete: null,
       snackbar: { open: false, severity: 'success', message: '' },
+
+      // filters & search
+      searchText: '',
+      filterBusinessUnit: '',
+      filterClient: '',
+      filterStatus: '',
+      density: 'standard',
+
+      // dropdowns
+      projectList: [],
+      projectParentList: [],
+      businessUnitList: [],
+      businessLineList: [],
+      userList: [],
+      currentUserList: [],
+
+      // column visibility
+      columnVisibility: {
+        ProjectCode: true,
+        ProjectName: true,
+        BusinessUnit: true,
+        ClientName: true,
+        ProjectManagerName: true,
+        ProjectDirectorName: true,
+        Remarks: true,
+      },
+
+      // pagination
+      filteredTotal: null,
     };
   }
-  //load initial data
+
   componentDidMount() {
-    // this.getProjects();
     this.getLookupDetails();
-    this.getUsers()
+    this.getUsers();
   }
 
+  // ─── Snackbar ──────────────────────────────────────────
   notify = (severity, message) => {
     this.setState({ snackbar: { open: true, severity, message } });
   };
@@ -80,6 +127,7 @@ class Project extends Component {
     this.setState((s) => ({ snackbar: { ...s.snackbar, open: false } }));
   };
 
+  // ─── Form handlers ────────────────────────────────────
   handleFieldChange = (field, value) => {
     this.setState((prev) => ({
       projectData: { ...prev.projectData, [field]: value }
@@ -91,43 +139,32 @@ class Project extends Component {
     this.handleSubmit(this.state.projectData);
   }
 
-  //fetch projects
+  // ─── Data fetching ────────────────────────────────────
   getUserName(id) {
-    const user = this.state.currentUserList.find((user) => user.UserId === id)
-    return user?.EmployeeName ? user?.EmployeeName : ''
+    const user = this.state.currentUserList.find((u) => u.UserId === id);
+    return user?.EmployeeName || '';
   }
+
   async getProjects() {
     this.setState({ loading: true });
-    let reqData = {
-      UserId: LoginState.UserId
-    }
+    const reqData = { UserId: LoginState.UserId };
     await new CommonUtilityController().getProjects(reqData)
       .then(data => {
         this.setState({ loading: false });
         if (data != undefined) {
-          let originalData = data.map((item) => {
-            return { ...item }
-          });
-
-          let displayData = data.map((item) => {
-            return {
-              ...item,
-              ProjectManagerName: this.getUserName(item.ProjectManagerId),
-              ProjectDirectorName: this.getUserName(item.ProjectDirectorId),
-              PMOName: item.PMOEmployeeName,
-            }
-          });
-
-          let projectParentList = fillSelectList(data, "ProjectName", 'ProjectMasterId');
-          this.setState({
-            data: displayData,
-            originalData: originalData,
-            projectParentList: projectParentList
-          });
+          const originalData = data.map(item => ({ ...item }));
+          const displayData = data.map(item => ({
+            ...item,
+            ProjectManagerName: this.getUserName(item.ProjectManagerId),
+            ProjectDirectorName: this.getUserName(item.ProjectDirectorId),
+            PMOName: item.PMOEmployeeName,
+          }));
+          const projectParentList = fillSelectList(data, 'ProjectName', 'ProjectMasterId');
+          this.setState({ data: displayData, originalData, projectParentList });
         }
       })
       .catch(error => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         this.notify('error', error.toString());
       });
   }
@@ -138,174 +175,91 @@ class Project extends Component {
       .then(data => {
         this.setState({ loading: false });
         if (data != undefined) {
-          let businessUnit = data.filter(a => a.LookupType == "BusinessUnit")
-          let businessUnitList = fillSelectList(businessUnit, "LookupName", "LookupName")
-          this.setState({ businessUnitList: businessUnitList });
-
-          let businessLine = data.filter(a => a.LookupType == "BusinessLine")
-          let businessLineList = fillSelectList(businessLine, "LookupName", "LookupName")
-          this.setState({ businessLineList: businessLineList });
+          const businessUnit = data.filter(a => a.LookupType == 'BusinessUnit');
+          this.setState({ businessUnitList: fillSelectList(businessUnit, 'LookupName', 'LookupName') });
+          const businessLine = data.filter(a => a.LookupType == 'BusinessLine');
+          this.setState({ businessLineList: fillSelectList(businessLine, 'LookupName', 'LookupName') });
         }
       })
       .catch(() => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         this.notify('error', 'Data fetching issue!!!');
       });
   }
 
   async getUsers() {
-    this.setState({ loading: true, });
+    this.setState({ loading: true });
     await new CommonUtilityController().getUsers()
       .then(result => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         if (result != undefined) {
-          //fill drop down list
-          let userList = fillSelectList(result, "EmployeeName", 'UserId');
-          this.setState({ userList: userList, currentUserList: result });
+          const userList = fillSelectList(result, 'EmployeeName', 'UserId');
+          this.setState({ userList, currentUserList: result });
         }
-        this.getProjects()
+        this.getProjects();
       })
-      .catch(error => {
-        this.setState({ loading: false, });
+      .catch(() => {
+        this.setState({ loading: false });
       });
-
   }
 
+  // ─── File handling ────────────────────────────────────
   viewDocument = async (url) => {
-    this.setState({ loading: true, });
+    this.setState({ loading: true });
     await new CommonUtilityController().downloadAttachment(url)
       .then(res => res.blob())
       .then(blob => {
-
-        let fileType = path.extname(url);
+        const fileType = path.extname(url);
         if (fileType == '.pdf') {
-          let fileUrl = window.URL.createObjectURL(blob);
-          this.setState({ viewDoc: true, filePath: fileUrl, fileType: fileType });
-        }
-        else {
-          var file = new Blob([blob], { type: 'image/png' });
+          const fileUrl = window.URL.createObjectURL(blob);
+          this.setState({ viewDoc: true, filePath: fileUrl, fileType });
+        } else {
+          const file = new Blob([blob], { type: 'image/png' });
           new FileHelper().getImageUrl(file, imageUrl => {
-            this.setState({ viewDoc: true, filePath: imageUrl, fileType: fileType });
+            this.setState({ viewDoc: true, filePath: imageUrl, fileType });
           });
         }
         this.setState({ loading: false });
-
       })
       .catch(error => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         this.notify('error', error.toString());
       });
-  }
-
-  get gridColumns() {
-    return [
-      {
-        field: 'action',
-        headerName: 'Action',
-        width: 130,
-        sortable: false,
-        filterable: false,
-        disableColumnMenu: true,
-        renderCell: (params) => {
-          const record = params.row;
-          const disabled = record.Status == "9";
-          return (
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip title="Edit record">
-                <span>
-                  <IconButton size="small" color="primary" disabled={disabled} onClick={() => this.editRecord(record)}>
-                    <EditRoundedIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="Delete record">
-                <span>
-                  <IconButton size="small" color="error" disabled={disabled} onClick={() => this.requestDelete(record)}>
-                    <DeleteRoundedIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="View record">
-                <span>
-                  <IconButton size="small" color="primary" onClick={() => this.viewProjectDetails(record)}>
-                    <VisibilityRoundedIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Stack>
-          );
-        },
-      },
-      { field: 'ProjectCode', headerName: 'Project Code', width: 130 },
-      { field: 'ProjectName', headerName: 'Project Name', flex: 1, minWidth: 160 },
-      { field: 'BusinessUnit', headerName: 'Business Unit', width: 130 },
-      { field: 'BusinessLine', headerName: 'Business Line', width: 130 },
-      { field: 'ClientName', headerName: 'Client Name', flex: 1, minWidth: 160 },
-      { field: 'ProjectManagerName', headerName: 'Project Manager', width: 150 },
-      { field: 'ProjectDirectorName', headerName: 'Project Director', width: 150 },
-      { field: 'PMOName', headerName: 'PMO', width: 120 },
-      { field: 'Remarks', headerName: 'Remarks', flex: 1, minWidth: 140 },
-    ];
-  }
-
-  //New record
-  newRecord = () => {
-    let projectData = {
-      ProjectMasterId: 0,
-      ProjectCode: "",
-      ProjectName: "",
-      ClientName: "",
-      BusinessUnit: "",
-      BusinessLine: "",
-      ProjectManagerId: "",
-      ProjectDirectorId: "",
-      PMOID: "",
-      Remarks: "",
-      Status: 0,
-    }
-    this.setState({ loading: false, editable: true, isUpload: false, visible: true, projectData: projectData });
   }
 
   getProjectImageURL = async (url) => {
-    this.setState({ loading: true, });
+    this.setState({ loading: true });
     await new CommonUtilityController().downloadAttachment(url)
       .then(res => res.blob())
       .then(blob => {
-        var file = new Blob([blob], { type: 'image/png' });
-        var fileUrl = URL.createObjectURL(file);
+        const file = new Blob([blob], { type: 'image/png' });
         new FileHelper().getImageUrl(file, imageUrl => {
           this.setState({ loading: false, imageFileUrl: imageUrl });
-        }
-
-        );
-
-        this.setState({ loading: false, });
-
+        });
       })
       .catch(error => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         this.notify('error', error.toString());
       });
   }
 
-  //edit record
+  // ─── CRUD operations ──────────────────────────────────
+  newRecord = () => {
+    const projectData = {
+      ProjectMasterId: 0, ProjectCode: '', ProjectName: '', ClientName: '',
+      BusinessUnit: '', BusinessLine: '', ProjectManagerId: '',
+      ProjectDirectorId: '', PMOID: '', Remarks: '', Status: 0,
+    };
+    this.setState({ loading: false, editable: true, isUpload: false, visible: true, projectData });
+  }
+
   editRecord = (project) => {
     const originalProject = this.state.originalData.find(p => p.ProjectMasterId === project.ProjectMasterId);
-
     if (originalProject) {
-      let path = originalProject.DocumentPath;
-      this.getProjectImageURL(path);
-
-      const formattedProject = {
-        ...originalProject,
-        PMOID: originalProject.PMOID || "",
-      };
+      this.getProjectImageURL(originalProject.DocumentPath);
       this.setState({
-        loading: false,
-        isUpload: false,
-        editable: true,
-        visible: true,
-        projectData: formattedProject
+        loading: false, isUpload: false, editable: true, visible: true,
+        projectData: { ...originalProject, PMOID: originalProject.PMOID || '' },
       });
     }
   }
@@ -324,176 +278,368 @@ class Project extends Component {
     if (project) this.deleteRecord(project);
   };
 
-  //delete record
   deleteRecord = async (project) => {
     project.CreatedBy = LoginState.UserId;
     project.CreatedDate = moment().format('YYYY-MM-DD HH:mm:ss');
     this.setState({ loading: true });
-
     await new CommonUtilityController().deleteProjectDetails(project)
       .then(data => {
-        this.setState({ loading: false, });
-
+        this.setState({ loading: false });
         if (data != undefined) {
-          let projectParentList = fillSelectList(data, "ProjectName", 'ProjectMasterId');
-          this.setState({ data: data, originalData: data, projectParentList: projectParentList });
+          const projectParentList = fillSelectList(data, 'ProjectName', 'ProjectMasterId');
+          this.setState({ data, originalData: data, projectParentList });
         }
         this.getProjects();
         this.notify('success', 'Data successfully deleted.');
       })
       .catch(error => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         this.notify('error', 'Data deletion issue!');
       });
   }
 
-  //view record
   viewProjectDetails = (project) => {
-    // alert(JSON.stringify(project))
     this.setState({ projectData: project, loading: false, viewProject: true, visible: false, editable: false });
   }
 
-  toggleModal = () => {
-    this.setState({
-      visible: !this.state.visible
-    });
-  }
-
-  toggleViewModal = () => {
-    this.setState({
-      viewProject: !this.state.viewProject
-    });
-  }
-
-  //upload document
-  uploadDocument = async (project) => {
-    let reqData = {
-      ProjectMasterId: project.ProjectMasterId
-    }
-    await this.getProjects(reqData);
-    // this.setState({ projectData: project, loading: false, editable: false, visible: false, isUpload: true });
-  }
-
-  //upload popup
-  toggleUploadModal = () => {
-    this.setState({
-      isUpload: !this.state.isUpload,
-      visible: !this.state.visible
-    });
-  }
-
-  fileUploadSubmit = async () => {
-    this.setState({ isUpload: false, visible: false })
-    this.getProjects();
-  }
-
   handleSubmit = async (project) => {
-
-    const { data } = this.state;
-
-
-    //********** Duplicate entry validation*/
-    if (project.ParentProjectMasterId == "") { project.ParentProjectMasterId = "0"; }
-
-    let isexist = false;
-    let reqData = {
-      "Record": project,
-      "TableName": "ProjectMaster"
-    }
-
-    this.setState({ loading: true });
-    // await new CommonUtilityController().isRecordExists(reqData)
-    //   .then((result) => {
-    //     this.setState({ loading: false });
-    //     if (result?.status == 1) {
-    //       isexist = true;
-    //       Modal.error({
-    //         content: 'Record already exists',
-    //       });
-    //     }
-    //   })
-    //   .catch(error => {
-    //     isexist = true;
-    //     this.setState({ loading: false });
-    //     Modal.error({
-    //       content: <p>Error found while validate the Record</p>,
-    //     });
-    //   });
-    // if (isexist)
-
-    //   return false;
-    ///********** Duplicate entry validation*/
+    if (project.ParentProjectMasterId == '') project.ParentProjectMasterId = '0';
     project.CreatedBy = LoginState.UserId;
     project.CreatedDate = moment().format('YYYY-MM-DD HH:mm:ss');
     project.LockedBy = LoginState.LockedBy;
     project.LockedDate = moment().format('YYYY-MM-DD HH:mm:ss');
     project.SecurityId = LoginState.SecurityId;
     project.Status = 1;
-    // ensure PMOID is set
-    if (!project.PMOID) project.PMOID = 0; // ★ NEW
+    if (!project.PMOID) project.PMOID = 0;
     this.setState({ loading: true });
-
     await new CommonUtilityController().saveProjectDetails(project)
       .then(data => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         if (data != undefined) {
-          let projectParentList = fillSelectList(data, "ProjectName", 'ProjectMasterId');
-          this.setState({
-            data: data, projectParentList: projectParentList,
-            originalData: data, visible: false
-          });
+          const projectParentList = fillSelectList(data, 'ProjectName', 'ProjectMasterId');
+          this.setState({ data, projectParentList, originalData: data, visible: false });
         }
         this.getProjects();
         this.notify('success', 'Data successfully Inserted.');
       })
       .catch(error => {
-        this.setState({ loading: false, });
+        this.setState({ loading: false });
         this.notify('error', 'Data insertion issue!');
       });
   }
 
+  // ─── Toggle / upload ──────────────────────────────────
+  toggleModal = () => {
+    this.setState({ visible: !this.state.visible });
+  }
+
+  toggleViewModal = () => {
+    this.setState({ viewProject: !this.state.viewProject });
+  }
+
+  uploadDocument = async (project) => {
+    const reqData = { ProjectMasterId: project.ProjectMasterId };
+    await this.getProjects(reqData);
+  }
+
+  toggleUploadModal = () => {
+    this.setState({ isUpload: !this.state.isUpload, visible: !this.state.visible });
+  }
+
+  fileUploadSubmit = async () => {
+    this.setState({ isUpload: false, visible: false });
+    this.getProjects();
+  }
+
+  // ─── Search & filter ──────────────────────────────────
+  getFilteredData() {
+    const { data, searchText, filterBusinessUnit, filterClient, filterStatus } = this.state;
+    let filtered = [...data];
+
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      filtered = filtered.filter(r =>
+        (r.ProjectName || '').toLowerCase().includes(q) ||
+        (r.ProjectCode || '').toLowerCase().includes(q) ||
+        (r.ClientName || '').toLowerCase().includes(q) ||
+        (r.ProjectManagerName || '').toLowerCase().includes(q) ||
+        (r.BusinessUnit || '').toLowerCase().includes(q)
+      );
+    }
+    if (filterBusinessUnit) {
+      filtered = filtered.filter(r => r.BusinessUnit === filterBusinessUnit);
+    }
+    if (filterClient) {
+      filtered = filtered.filter(r => r.ClientName === filterClient);
+    }
+    if (filterStatus) {
+      const isActive = filterStatus === 'active';
+      filtered = filtered.filter(r => isActive ? String(r.Status) !== '9' : String(r.Status) === '9');
+    }
+
+    return filtered;
+  }
+
+  getUniqueClients() {
+    const { data } = this.state;
+    const clients = [...new Set(data.map(r => r.ClientName).filter(Boolean))];
+    return clients.map(c => ({ label: c, value: c }));
+  }
+
+  // ─── Export ────────────────────────────────────────────
+  handleExport = () => {
+    const filtered = this.getFilteredData();
+    const headers = ['Project Code', 'Project Name', 'Business Unit', 'Client', 'Project Manager', 'Project Director', 'Remarks'];
+    const rows = filtered.map(r => [
+      r.ProjectCode, r.ProjectName, r.BusinessUnit, r.ClientName,
+      r.ProjectManagerName, r.ProjectDirectorName, r.Remarks,
+    ]);
+    const csv = [headers, ...rows].map(row => row.map(c => `"${(c || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'projects.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  handleRefresh = () => {
+    this.getProjects();
+  }
+
+  // ─── Column definitions ────────────────────────────────
+  get gridColumns() {
+    const { columnVisibility } = this.state;
+
+    const cols = [
+      {
+        field: 'action',
+        headerName: '',
+        width: 56,
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => <ActionMenu record={params.row} onEdit={this.editRecord} onDelete={this.requestDelete} onView={this.viewProjectDetails} />,
+      },
+      {
+        field: 'ProjectName',
+        headerName: 'Project',
+        flex: 1.5,
+        minWidth: 220,
+        renderCell: (params) => (
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#111827', lineHeight: 1.3 }}>
+              {params.value || '—'}
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: '#9CA3AF', mt: 0.25 }}>
+              {params.row.ProjectCode || ''}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        field: 'BusinessUnit',
+        headerName: 'Business Unit',
+        width: 150,
+        renderCell: (params) => params.value ? (
+          <Chip
+            size="small"
+            label={params.value}
+            sx={{
+              height: 26, fontSize: 12, fontWeight: 600, borderRadius: '999px',
+              bgcolor: '#EFF6FF', color: '#1E3A8A', border: '1px solid #BFDBFE',
+              '& .MuiChip-label': { px: 1.5 },
+            }}
+          />
+        ) : '—',
+      },
+      {
+        field: 'ClientName',
+        headerName: 'Client',
+        flex: 1,
+        minWidth: 160,
+        renderCell: (params) => (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <BusinessIcon sx={{ fontSize: 16, color: '#9CA3AF' }} />
+            <Typography sx={{ fontSize: 13, color: '#374151' }}>
+              {params.value || '—'}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        field: 'ProjectManagerName',
+        headerName: 'Project Manager',
+        width: 180,
+        renderCell: (params) => {
+          const name = params.value || '';
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+              <Avatar
+                sx={{
+                  width: 32, height: 32, fontSize: 12, fontWeight: 700,
+                  bgcolor: stringToColor(name), color: '#fff',
+                }}
+              >
+                {getInitials(name)}
+              </Avatar>
+              <Typography sx={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
+                {name || '—'}
+              </Typography>
+            </Box>
+          );
+        },
+      },
+      {
+        field: 'ProjectDirectorName',
+        headerName: 'Director',
+        width: 160,
+        renderCell: (params) => {
+          const name = params.value || '';
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+              <Avatar
+                sx={{
+                  width: 28, height: 28, fontSize: 11, fontWeight: 700,
+                  bgcolor: `${stringToColor(name)}18`, color: stringToColor(name),
+                  border: `1.5px solid ${stringToColor(name)}40`,
+                }}
+              >
+                {getInitials(name)}
+              </Avatar>
+              <Typography sx={{ fontSize: 13, color: '#6B7280' }}>
+                {name || '—'}
+              </Typography>
+            </Box>
+          );
+        },
+      },
+      {
+        field: 'Remarks',
+        headerName: 'Remarks',
+        flex: 1,
+        minWidth: 140,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {params.value || '—'}
+          </Typography>
+        ),
+      },
+    ];
+
+    return cols.filter(c => c.field === 'action' || columnVisibility[c.field] !== false);
+  }
+
+  // ─── Render ───────────────────────────────────────────
   render() {
-    const { data, loading, visible, viewProject, editable, projectData, userList, projectParentList, businessUnitList, businessLineList, isUpload, filePath, fileType, viewDoc, imageFileUrl, confirmOpen, snackbar } = this.state;
-    const projectCount = this.state.filteredTotal !== null ? this.state.filteredTotal : data.length;
+    const {
+      data, loading, visible, viewProject, editable, projectData,
+      userList, projectParentList, businessUnitList, businessLineList,
+      isUpload, filePath, fileType, viewDoc, imageFileUrl,
+      confirmOpen, snackbar, searchText, filterBusinessUnit,
+      filterClient, filterStatus, density, columnVisibility,
+    } = this.state;
+
+    const filteredData = this.getFilteredData();
+    const count = filteredData.length;
+
+    const buOptions = this.state.businessUnitList?.map(b => ({ label: b.label, value: b.value })) || [];
+    const clientOptions = this.getUniqueClients();
+    const statusOptions = [
+      { label: 'Active', value: 'active' },
+      { label: 'Archived', value: 'archived' },
+    ];
 
     return (
       <PageContainer>
+
+        {/* ── Breadcrumbs ── */}
+        <AppBreadcrumbs />
+
+        {/* ── Page Header ── */}
         <PageHeader
-          title="Project Details"
+          title="Projects"
           subtitle="Manage all projects in the CCM system."
           actions={
-            <MuiButton variant="contained" color="primary" startIcon={<AddRoundedIcon />} onClick={() => this.newRecord()}>
+            <MuiButton
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={this.newRecord}
+              sx={{ borderRadius: '10px', px: 3, py: 1.25 }}
+            >
               New Project
             </MuiButton>
           }
         />
 
-        <DataCard title="Projects" count={data.length ? projectCount : null} countLabel="Projects">
-          {!loading && data.length === 0 ? (
-            <EmptyState
-              icon={<FolderOpenRoundedIcon />}
-              title="No Projects Yet"
-              description="Projects will appear here once created. Get started by adding your first project."
-              primaryAction={
-                <MuiButton variant="contained" startIcon={<AddRoundedIcon />} onClick={() => this.newRecord()}>
-                  Create Project
-                </MuiButton>
-              }
+        {/* ── Data Grid ── */}
+        {loading && data.length === 0 ? (
+          <Box sx={{ py: 8, textAlign: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : !loading && data.length === 0 ? (
+          <EmptyState
+            icon={<FolderIcon sx={{ fontSize: 40 }} />}
+            title="No Projects Found"
+            description="Get started by creating your first project in the CCM system."
+            primaryAction={
+              <MuiButton variant="contained" startIcon={<AddIcon />} onClick={this.newRecord} sx={{ borderRadius: '10px', px: 3 }}>
+                Create Project
+              </MuiButton>
+            }
+          />
+        ) : (
+          <Box>
+            <GridToolbar
+              searchValue={searchText}
+              onSearchChange={(val) => this.setState({ searchText: val })}
+              searchPlaceholder="Search projects..."
+              filters={[
+                {
+                  name: 'BusinessUnit',
+                  label: 'Business Unit',
+                  value: filterBusinessUnit,
+                  options: buOptions,
+                },
+                {
+                  name: 'Client',
+                  label: 'Client',
+                  value: filterClient,
+                  options: clientOptions,
+                },
+                {
+                  name: 'Status',
+                  label: 'Status',
+                  value: filterStatus,
+                  options: statusOptions,
+                },
+              ]}
+              onFilterChange={(name, val) => {
+                if (name === 'BusinessUnit') this.setState({ filterBusinessUnit: val });
+                else if (name === 'Client') this.setState({ filterClient: val });
+                else if (name === 'Status') this.setState({ filterStatus: val });
+              }}
+              onRefresh={this.handleRefresh}
+              onExport={this.handleExport}
+              columnVisibility={columnVisibility}
+              onColumnToggle={(field) => this.setState(prev => ({
+                columnVisibility: { ...prev.columnVisibility, [field]: !prev.columnVisibility[field] },
+              }))}
+              density={density}
+              onDensityChange={(d) => this.setState({ density: d })}
             />
-          ) : (
             <AppDataGrid
-              rows={data}
+              rows={filteredData}
               columns={this.gridColumns}
               loading={loading}
               getRowId={(row) => row.ProjectMasterId}
-              height={640}
-              emptyTitle="No matching projects"
-              emptyDescription="Try adjusting your search."
+              density={density}
+              height={Math.min(56 + count * 56 + 56, 720)}
+              pageSize={10}
             />
-          )}
-        </DataCard>
+          </Box>
+        )}
 
-        {/* ── Create / Edit dialog (MUI Tabs + controlled form) ── */}
+        {/* ── Create / Edit dialog ── */}
         <FormDialog
           open={visible}
           onClose={this.toggleModal}
@@ -501,20 +647,24 @@ class Project extends Component {
           maxWidth="md"
           actions={null}
         >
-          <Backdrop open={this.state.loading} sx={{ position: 'absolute', zIndex: (t) => t.zIndex.modal + 1 }}>
+          <Backdrop open={loading} sx={{ position: 'absolute', zIndex: (t) => t.zIndex.modal + 1 }}>
             <CircularProgress />
           </Backdrop>
           <Tabs
             value={editable ? 0 : 1}
-            onChange={(_e, val) => { if (val === 1) this.uploadDocument(); }}
+            onChange={(_e, val) => { if (val === 1) this.uploadDocument(projectData); }}
             sx={{ mb: 1 }}
           >
             <Tab label="Project Details" />
             <Tab label="Upload Document" disabled={projectData.ProjectMasterId === 0} />
           </Tabs>
+
+          {/* ── Form tab ── */}
           <div hidden={!editable} style={{ padding: '8px 0 16px' }}>
             <Box component="form" onSubmit={this.handleSubmitForm}>
-              <Divider textAlign="left" sx={{ color: '#3b466f', fontWeight: 600, fontSize: '14px', mb: 2 }}>Project Information</Divider>
+              <Divider textAlign="left" sx={{ color: '#475569', fontWeight: 600, fontSize: 13, mb: 2, letterSpacing: '0.04em' }}>
+                Project Information
+              </Divider>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField fullWidth size="small" label="Project Code" required
@@ -536,7 +686,9 @@ class Project extends Component {
                 </Grid>
               </Grid>
 
-              <Divider textAlign="left" sx={{ color: '#3b466f', fontWeight: 600, fontSize: '14px', mt: 3, mb: 2 }}>Business Classification</Divider>
+              <Divider textAlign="left" sx={{ color: '#475569', fontWeight: 600, fontSize: 13, mt: 3, mb: 2, letterSpacing: '0.04em' }}>
+                Business Classification
+              </Divider>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField fullWidth size="small" label="Business Unit" required select
@@ -561,7 +713,9 @@ class Project extends Component {
                 </Grid>
               </Grid>
 
-              <Divider textAlign="left" sx={{ color: '#3b466f', fontWeight: 600, fontSize: '14px', mt: 3, mb: 2 }}>Team</Divider>
+              <Divider textAlign="left" sx={{ color: '#475569', fontWeight: 600, fontSize: 13, mt: 3, mb: 2, letterSpacing: '0.04em' }}>
+                Team
+              </Divider>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField fullWidth size="small" label="Project Manager" required select
@@ -601,24 +755,35 @@ class Project extends Component {
                 </Grid>
               </Grid>
 
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, pt: 2, mt: 3, borderTop: '1px solid #f0f0f0' }}>
-                <MuiButton variant="text" color="inherit" onClick={this.toggleModal}>
-                  Close
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, pt: 2, mt: 3, borderTop: '1px solid #F3F4F6' }}>
+                <MuiButton variant="text" color="inherit" onClick={this.toggleModal} sx={{ borderRadius: '10px' }}>
+                  Cancel
                 </MuiButton>
-                <MuiButton variant="contained" color="primary" type="submit">
+                <MuiButton variant="contained" color="primary" type="submit" sx={{ borderRadius: '10px', px: 3 }}>
                   {projectData.ProjectMasterId === 0 ? 'Create Project' : 'Save Changes'}
                 </MuiButton>
               </Box>
             </Box>
           </div>
+
+          {/* ── Upload tab ── */}
           <div hidden={editable}>
-            <FileUpload toggleUploadModal={this.toggleUploadModal} api={ProjectAtt_Api} fileProp={SIGN_FILE_PROP} dataKey="ProjectMasterId" keyVal={projectData.ProjectMasterId} fileUploadSubmit={this.fileUploadSubmit} reset={true} page={'Project'} />
-            <Divider sx={{ color: 'success.main', my: 1 }} hidden={projectData.DocumentPath == 0 || projectData.DocumentPath == null}>
-              Project's Logo
+            <FileUpload
+              toggleUploadModal={this.toggleUploadModal}
+              api={ProjectAtt_Api}
+              fileProp={SIGN_FILE_PROP}
+              dataKey="ProjectMasterId"
+              keyVal={projectData.ProjectMasterId}
+              fileUploadSubmit={this.fileUploadSubmit}
+              reset={true}
+              page="Project"
+            />
+            <Divider sx={{ my: 1 }} hidden={projectData.DocumentPath == 0 || projectData.DocumentPath == null}>
+              Project Logo
             </Divider>
-            <table className="table-from table-from-th table-from-td" style={{ marginTop: -1, width: '100%' }} hidden={projectData.DocumentPath == 0 || projectData.DocumentPath == null}>
-              <tbody><tr style={{ textAlign: "center" }}><td><img alt='ProjectLogo' style={{ width: "100px", height: "100px", objectFit: 'contain' }} src={imageFileUrl} /></td></tr></tbody>
-            </table>
+            <Box sx={{ textAlign: 'center', py: 2 }} hidden={projectData.DocumentPath == 0 || projectData.DocumentPath == null}>
+              <img alt="ProjectLogo" style={{ width: 100, height: 100, objectFit: 'contain', borderRadius: 12 }} src={imageFileUrl} />
+            </Box>
           </div>
         </FormDialog>
 
@@ -629,19 +794,40 @@ class Project extends Component {
           title="Project Details"
           maxWidth="sm"
           actions={
-            <MuiButton variant="contained" color="primary" onClick={this.toggleViewModal}>Close</MuiButton>
+            <MuiButton variant="contained" color="primary" onClick={this.toggleViewModal} sx={{ borderRadius: '10px' }}>
+              Close
+            </MuiButton>
           }
         >
-          <Backdrop open={this.state.loading} sx={{ position: 'absolute', zIndex: (t) => t.zIndex.modal + 1 }}>
+          <Backdrop open={loading} sx={{ position: 'absolute', zIndex: (t) => t.zIndex.modal + 1 }}>
             <CircularProgress />
           </Backdrop>
-          <div hidden={editable}>
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-              Project: {projectData.ProjectCode} - {projectData.ProjectName}
-            </Typography>
-          </div>
+          <Box sx={{ py: 2 }}>
+            <Stack spacing={2}>
+              {[
+                ['Project Code', projectData.ProjectCode],
+                ['Project Name', projectData.ProjectName],
+                ['Client', projectData.ClientName],
+                ['Business Unit', projectData.BusinessUnit],
+                ['Business Line', projectData.BusinessLine],
+                ['Project Manager', projectData.ProjectManagerName],
+                ['Project Director', projectData.ProjectDirectorName],
+                ['Remarks', projectData.Remarks],
+              ].map(([label, value]) => (
+                <Box key={label}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
+                    {label}
+                  </Typography>
+                  <Typography sx={{ fontSize: 15, color: '#111827', fontWeight: 500 }}>
+                    {value || '—'}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
         </FormDialog>
 
+        {/* ── Confirm Delete ── */}
         <ConfirmDialog
           open={confirmOpen}
           title="Delete project?"
@@ -651,23 +837,71 @@ class Project extends Component {
           onCancel={this.cancelDelete}
         />
 
-        <div>
-          <FileViewer filePath={filePath} fileType={fileType} onCancel={() => this.setState({ viewDoc: false })} visible={viewDoc} />
-        </div>
+        {/* ── File Viewer ── */}
+        <FileViewer filePath={filePath} fileType={fileType} onCancel={() => this.setState({ viewDoc: false })} visible={viewDoc} />
 
+        {/* ── Snackbar ── */}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={4000}
           onClose={this.closeSnackbar}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         >
-          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>
             {snackbar.message}
           </Alert>
         </Snackbar>
       </PageContainer>
     );
   }
+}
+
+// ─── Action Menu Component (⋮ button) ────────────────────
+function ActionMenu({ record, onEdit, onDelete, onView }) {
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const open = Boolean(anchorEl);
+  const disabled = record.Status == '9';
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <IconButton
+          size="small"
+          onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+          sx={{
+            color: '#9CA3AF',
+            width: 32, height: 32,
+            borderRadius: '8px',
+            transition: 'all 0.15s ease',
+            '&:hover': { bgcolor: '#F1F5F9', color: '#1E3A8A' },
+          }}
+        >
+          <MoreIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{ paper: { sx: { minWidth: 160, p: 0.5 } } }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <MenuItem dense onClick={() => { setAnchorEl(null); onView(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><ViewIcon sx={{ fontSize: 16, color: '#2563EB' }} /></ListItemIcon>
+          <ListItemText primary="View" primaryTypographyProps={{ fontSize: 13, fontWeight: 500 }} />
+        </MenuItem>
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onEdit(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><EditIcon sx={{ fontSize: 16, color: '#059669' }} /></ListItemIcon>
+          <ListItemText primary="Edit" primaryTypographyProps={{ fontSize: 13, fontWeight: 500 }} />
+        </MenuItem>
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onDelete(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><DeleteIcon sx={{ fontSize: 16, color: '#EF4444' }} /></ListItemIcon>
+          <ListItemText primary="Delete" primaryTypographyProps={{ fontSize: 13, fontWeight: 500, color: disabled ? undefined : '#EF4444' }} />
+        </MenuItem>
+      </Menu>
+    </>
+  );
 }
 
 export default Project;

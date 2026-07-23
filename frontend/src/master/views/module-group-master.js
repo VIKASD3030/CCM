@@ -1,21 +1,21 @@
 import moment from 'moment';
 import React, { Component } from 'react';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
-import Stack from '@mui/material/Stack';
-import Grid from '@mui/material/Grid';
-import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import {
+  TextField, MenuItem, Grid, Box, CircularProgress,
+  Snackbar, Alert, Tooltip, IconButton, Typography, Button as MuiButton,
+  Menu, ListItemIcon, ListItemText,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  MoreVert as MoreIcon,
+  Category as CategoryIcon,
+} from '@mui/icons-material';
 import LoginState from '../../authentication/loginState';
 import CommonUtilityController from '../controller/common-utility-controller';
 import { fillSelectList } from '../../helper/common-utility';
-import { PageContainer, PageHeader, DataCard, AppDataGrid, FormDialog, ConfirmDialog } from '../../components/ui';
+import { PageContainer, PageHeader, EmptyState, AppDataGrid, FormDialog, ConfirmDialog, AppBreadcrumbs, GridToolbar } from '../../components/ui';
 
 const emptyModuleGroup = { ModuleGroupId: 0, ModuleGroupCode: '', ModuleGroupName: '', ParentModuleGroupId: '', Level: '', Remarks: '', Status: 0 };
 
@@ -33,6 +33,15 @@ class ModuleGroup extends Component {
       pendingDelete: null,
       formErrors: {},
       snackbar: { open: false, severity: 'success', message: '' },
+      searchText: '',
+      columnVisibility: {
+        ModuleGroupCode: true,
+        ModuleGroupName: true,
+        ParentModuleGroupName: true,
+        Level: true,
+        Remarks: true,
+      },
+      density: 'standard',
     };
   }
 
@@ -112,44 +121,161 @@ class ModuleGroup extends Component {
       .catch(() => { this.setState({ loading: false }); this.notify('error', 'Data insertion issue!'); });
   };
 
+  getFilteredData() {
+    const { data, searchText } = this.state;
+    if (!searchText) return data;
+    const q = searchText.toLowerCase();
+    return data.filter(r =>
+      (r.ModuleGroupCode || '').toLowerCase().includes(q) ||
+      (r.ModuleGroupName || '').toLowerCase().includes(q) ||
+      (r.ParentModuleGroupName || '').toLowerCase().includes(q)
+    );
+  }
+
+  handleExport = () => {
+    const filtered = this.getFilteredData();
+    const headers = ['Module Group Code', 'Module Group Name', 'Parent Module Group', 'Order By', 'Remarks'];
+    const rows = filtered.map(r => [r.ModuleGroupCode, r.ModuleGroupName, r.ParentModuleGroupName, r.Level, r.Remarks]);
+    const csv = [headers, ...rows].map(row => row.map(c => `"${(c || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'module-groups.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  handleRefresh = () => { this.getModuleGroups(); };
+
   get gridColumns() {
-    return [
+    const { columnVisibility } = this.state;
+    const cols = [
       {
-        field: 'action', headerName: 'Action', width: 110, sortable: false, filterable: false, disableColumnMenu: true,
-        renderCell: (params) => {
-          const disabled = params.row.Status == '9';
-          return (
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip title="Edit"><span><IconButton size="small" color="primary" disabled={disabled} onClick={() => this.editRecord(params.row)}><EditRoundedIcon fontSize="small" /></IconButton></span></Tooltip>
-              <Tooltip title="Delete"><span><IconButton size="small" color="error" disabled={disabled} onClick={() => this.requestDelete(params.row)}><DeleteRoundedIcon fontSize="small" /></IconButton></span></Tooltip>
-            </Stack>
-          );
-        },
+        field: 'action',
+        headerName: '',
+        width: 56,
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
+        renderCell: (params) => <ActionMenu record={params.row} onEdit={this.editRecord} onDelete={this.requestDelete} />,
       },
-      { field: 'ModuleGroupCode', headerName: 'Module Group Code', flex: 1, minWidth: 160 },
-      { field: 'ModuleGroupName', headerName: 'Module Group Name', flex: 1.4, minWidth: 190 },
-      { field: 'ParentModuleGroupName', headerName: 'Parent Module Group', flex: 1.2, minWidth: 180 },
-      { field: 'Level', headerName: 'Order By', width: 110, type: 'number', align: 'right', headerAlign: 'right' },
-      { field: 'Remarks', headerName: 'Remarks', flex: 1.2, minWidth: 150 },
+      {
+        field: 'ModuleGroupCode',
+        headerName: 'Module Group Code',
+        flex: 1,
+        minWidth: 160,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151' }}>{params.value || '\u2014'}</Typography>
+        ),
+      },
+      {
+        field: 'ModuleGroupName',
+        headerName: 'Module Group Name',
+        flex: 1.4,
+        minWidth: 190,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151' }}>{params.value || '\u2014'}</Typography>
+        ),
+      },
+      {
+        field: 'ParentModuleGroupName',
+        headerName: 'Parent Module Group',
+        flex: 1.2,
+        minWidth: 180,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151' }}>{params.value || '\u2014'}</Typography>
+        ),
+      },
+      {
+        field: 'Level',
+        headerName: 'Order By',
+        width: 110,
+        type: 'number',
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#374151' }}>{params.value != null ? params.value : '\u2014'}</Typography>
+        ),
+      },
+      {
+        field: 'Remarks',
+        headerName: 'Remarks',
+        flex: 1.2,
+        minWidth: 150,
+        renderCell: (params) => (
+          <Typography sx={{ fontSize: 13, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {params.value || '\u2014'}
+          </Typography>
+        ),
+      },
     ];
+    return cols.filter(c => c.field === 'action' || columnVisibility[c.field] !== false);
   }
 
   render() {
-    const { data, loading, visible, moduleGroupData, confirmOpen, formErrors, snackbar } = this.state;
-    const count = this.state.filteredTotal !== null ? this.state.filteredTotal : data.length;
+    const { data, loading, visible, moduleGroupData, confirmOpen, formErrors, snackbar, searchText, density, columnVisibility } = this.state;
+    const filteredData = this.getFilteredData();
+    const count = filteredData.length;
+
     return (
       <PageContainer>
-        <PageHeader title="Module Group" subtitle="Manage module groups and their hierarchy"
-          actions={<Button variant="contained" startIcon={<AddRoundedIcon />} onClick={this.newRecord}>New Module Group</Button>}
+        <AppBreadcrumbs />
+        <PageHeader
+          title="Module Group"
+          subtitle="Manage module groups and their hierarchy"
+          actions={
+            <MuiButton variant="contained" startIcon={<AddIcon />} onClick={this.newRecord} sx={{ borderRadius: '10px', px: 3, py: 1.25 }}>
+              New Module Group
+            </MuiButton>
+          }
         />
-        <DataCard title="Module Group Details" count={data.length ? count : null} countLabel="Records">
-          <AppDataGrid rows={data} columns={this.gridColumns} loading={loading} getRowId={(row) => row.ModuleGroupId}
-            emptyTitle="No module groups yet" emptyDescription="Create your first module group."
-            emptyAction={<Button variant="contained" startIcon={<AddRoundedIcon />} onClick={this.newRecord}>New Module Group</Button>}
+
+        {loading && data.length === 0 ? (
+          <Box sx={{ py: 8, textAlign: 'center' }}><CircularProgress /></Box>
+        ) : !loading && data.length === 0 ? (
+          <EmptyState
+            icon={<CategoryIcon sx={{ fontSize: 40 }} />}
+            title="No Module Groups Found"
+            description="Get started by creating your first module group."
+            primaryAction={
+              <MuiButton variant="contained" startIcon={<AddIcon />} onClick={this.newRecord} sx={{ borderRadius: '10px', px: 3 }}>
+                Create Module Group
+              </MuiButton>
+            }
           />
-        </DataCard>
+        ) : (
+          <Box>
+            <GridToolbar
+              searchValue={searchText}
+              onSearchChange={(val) => this.setState({ searchText: val })}
+              searchPlaceholder="Search module groups..."
+              onRefresh={this.handleRefresh}
+              onExport={this.handleExport}
+              columnVisibility={columnVisibility}
+              onColumnToggle={(field) => this.setState(prev => ({
+                columnVisibility: { ...prev.columnVisibility, [field]: !prev.columnVisibility[field] },
+              }))}
+              density={density}
+              onDensityChange={(d) => this.setState({ density: d })}
+            />
+            <AppDataGrid
+              rows={filteredData}
+              columns={this.gridColumns}
+              loading={loading}
+              getRowId={(row) => row.ModuleGroupId}
+              density={density}
+              height={Math.min(56 + count * 56 + 56, 720)}
+              pageSize={10}
+            />
+          </Box>
+        )}
+
         <FormDialog open={visible} onClose={this.toggleModal} title="Module Group Details"
-          actions={<><Button variant="text" color="inherit" onClick={this.toggleModal}>Close</Button><Button variant="contained" onClick={this.onFormSubmit}>Submit</Button></>}
+          actions={
+            <>
+              <MuiButton variant="text" color="inherit" onClick={this.toggleModal} sx={{ borderRadius: '10px' }}>Cancel</MuiButton>
+              <MuiButton variant="contained" color="primary" onClick={this.onFormSubmit} sx={{ borderRadius: '10px', px: 3 }}>Submit</MuiButton>
+            </>
+          }
         >
           <Grid container spacing={2.5} sx={{ pt: 0.5 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -174,11 +300,54 @@ class ModuleGroup extends Component {
         </FormDialog>
         <ConfirmDialog open={confirmOpen} title="Delete module group?" message="Are you sure you want to delete this record?" confirmText="Delete" onConfirm={this.confirmDelete} onCancel={this.cancelDelete} />
         <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={this.closeSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>{snackbar.message}</Alert>
+          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>{snackbar.message}</Alert>
         </Snackbar>
       </PageContainer>
     );
   }
+}
+
+function ActionMenu({ record, onEdit, onDelete }) {
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const open = Boolean(anchorEl);
+  const disabled = record.Status == '9';
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <IconButton
+          size="small"
+          onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+          sx={{
+            color: '#9CA3AF',
+            width: 32, height: 32,
+            borderRadius: '8px',
+            transition: 'all 0.15s ease',
+            '&:hover': { bgcolor: '#F1F5F9', color: '#1E3A8A' },
+          }}
+        >
+          <MoreIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{ paper: { sx: { minWidth: 160, p: 0.5 } } }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onEdit(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><EditIcon sx={{ fontSize: 16, color: '#059669' }} /></ListItemIcon>
+          <ListItemText primary="Edit" primaryTypographyProps={{ fontSize: 13, fontWeight: 500 }} />
+        </MenuItem>
+        <MenuItem dense disabled={disabled} onClick={() => { setAnchorEl(null); onDelete(record); }} sx={{ borderRadius: 1 }}>
+          <ListItemIcon><DeleteIcon sx={{ fontSize: 16, color: '#EF4444' }} /></ListItemIcon>
+          <ListItemText primary="Delete" primaryTypographyProps={{ fontSize: 13, fontWeight: 500, color: disabled ? undefined : '#EF4444' }} />
+        </MenuItem>
+      </Menu>
+    </>
+  );
 }
 
 export default ModuleGroup;
