@@ -8,6 +8,7 @@ import {
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button,
   Box, Typography, TextField, IconButton, Avatar, Chip, Tooltip, Drawer, Divider,
   CircularProgress, Backdrop, Stack, InputAdornment, Tab, Tabs, LinearProgress,
+  FormControl, InputLabel, Select, MenuItem,
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, Send as SendIcon, AttachFile as AttachIcon,
@@ -24,6 +25,75 @@ import '../ccm.css';
 
 const DRAFTABLE = ['classified', 'drafted', 'pending_review', 'approved'];
 
+const LETTER_TYPES = [
+  { value: 'eot', label: 'Extension of Time (EOT)' },
+  { value: 'payment_delay', label: 'Payment Delay' },
+  { value: 'drawing_issue', label: 'Drawing Issue' },
+  { value: 'variation_order', label: 'Variation Order' },
+  { value: 'site_instruction', label: 'Site Instruction' },
+  { value: 'rfi', label: 'Request for Information (RFI)' },
+  { value: 'nec_notice', label: 'NEC Notice' },
+  { value: 'claim', label: 'Claim' },
+  { value: 'correspondence', label: 'General Correspondence' },
+];
+
+const LETTER_TYPE_PROMPTS = {
+  eot: [
+    { label: 'EOT Claim — Delayed Site Access', prompt: 'Draft an Extension of Time claim citing delayed site access as the cause of delay. Include impact on programme, entitlement under the contract, and the requested extension period.' },
+    { label: 'EOT Notification — Weather Delays', prompt: 'Write an EOT notification for abnormal weather conditions causing delays to the construction programme. Reference the relevant contract clause and supporting meteorological data.' },
+    { label: 'EOT Submission — Programme Analysis', prompt: 'Prepare an EOT submission with a detailed programme analysis showing the critical path impact. Include as-built vs. baseline programme comparison and delay event identification.' },
+    { label: 'EOT Follow-Up — Rejection Response', prompt: 'Draft a follow-up response to the client\'s earlier rejection of our EOT claim. Address each rejection point with supporting evidence and contractual justification.' },
+  ],
+  payment_delay: [
+    { label: 'Payment Reminder — Overdue Invoice', prompt: 'Draft a formal payment reminder letter for an overdue invoice. State the invoice number, amount due, original due date, and request immediate payment.' },
+    { label: 'Payment Delay Notice — Contract Clause', prompt: 'Write a formal payment delay notice citing the relevant contract clause regarding late payment. Reference the outstanding amount, days overdue, and applicable interest provisions.' },
+    { label: 'Payment Escalation — Persistent Delays', prompt: 'Prepare an escalation letter for persistently delayed payments. Address it to senior management, summarizing the payment history, cumulative delays, and impact on project operations.' },
+    { label: 'Final Demand — Outstanding Payment', prompt: 'Draft a final demand letter for outstanding payment. State the total amount owed, deadline for payment, and consequences of non-payment including suspension of works or dispute resolution.' },
+  ],
+  drawing_issue: [
+    { label: 'RFI — Unclear Structural Details', prompt: 'Write a Request for Information regarding unclear details in the structural drawings. Specify the drawing numbers, sheet references, and the exact information needed to proceed with construction.' },
+    { label: 'Drawing Discrepancy Report', prompt: 'Draft a letter reporting discrepancies found between the issued drawings and actual site conditions. Include photo references, affected areas, and request revised drawings or clarification.' },
+    { label: 'Drawing Revision Request — MME Conflicts', prompt: 'Request revised drawings to resolve MME coordination conflicts. Identify the clashing systems, affected zones, and propose a resolution approach for the designer to confirm.' },
+    { label: 'Drawing Revision Impact Notice', prompt: 'Formal notice that a recent drawing revision impacts the construction sequence and programme. Detail the changes, affected work packages, and request a programme adjustment or cost impact assessment.' },
+  ],
+  variation_order: [
+    { label: 'VO Submission — Cost Impact', prompt: 'Draft a Variation Order submission with a detailed cost impact analysis. Include the scope of additional work, rate build-up, daywork sheets, and total claimed amount.' },
+    { label: 'VECP Proposal — Cost Savings', prompt: 'Write a Value Engineering Change Proposal (VECP) suggesting a cost-saving alternative while maintaining quality and functionality. Quantify the savings and describe the technical merit.' },
+    { label: 'Contra-Charge VO — Contractor Fault', prompt: 'Prepare a contra-charge Variation Order for changes necessitated by contractor-caused issues. Document the root cause, the additional work required, and the cost to be charged back.' },
+    { label: 'VO Instruction Acknowledgment', prompt: 'Draft a letter acknowledging receipt of a Variation Order instruction from the engineer. Confirm understanding of the scope, request any missing details, and note any reservations regarding cost or programme.' },
+  ],
+  site_instruction: [
+    { label: 'Instruction Acknowledgment', prompt: 'Draft an acknowledgment of a site instruction received from the engineer. Confirm receipt, understanding of the required actions, and the planned implementation timeline.' },
+    { label: 'Compliance Confirmation', prompt: 'Write a response confirming compliance with a site instruction issued. Detail the actions taken, resources deployed, and any outcomes or observations during execution.' },
+    { label: 'Formal Objection to Instruction', prompt: 'Formal objection to a site instruction citing contractual grounds. State the specific clause relied upon, explain why the instruction is considered beyond the contractor\'s obligations, and request withdrawal or amendment.' },
+    { label: 'Clarification Request', prompt: 'Request clarification on an ambiguous site instruction. Quote the instruction verbatim, identify the unclear portions, and ask for specific guidance to avoid misinterpretation.' },
+  ],
+  rfi: [
+    { label: 'RFI — Specification Clarification', prompt: 'Draft an RFI seeking clarification on a specific clause in the technical specifications. Reference the clause number, state the ambiguity, and request a definitive interpretation to proceed.' },
+    { label: 'RFI — Material Substitution', prompt: 'Write an RFI regarding approval for a material substitution. Describe the proposed alternative, explain the technical equivalence or superiority, and request formal approval before procurement.' },
+    { label: 'RFI — Trade Sequencing', prompt: 'Prepare an RFI on sequencing dependencies between trades. Identify the conflicting activities, explain the construction logic issue, and request the engineer\'s direction on the preferred sequence.' },
+    { label: 'RFI — Geotechnical Data', prompt: 'Submit an RFI reporting a discrepancy between the geotechnical data in the contract documents and actual ground conditions encountered. Request additional investigation or revised foundation recommendations.' },
+  ],
+  nec_notice: [
+    { label: 'Early Warning — Anticipated Delay', prompt: 'Draft an early warning notice under NEC4 for an anticipated delay event. Describe the matter, its potential impact on completion, and propose mitigation measures.' },
+    { label: 'CE Notification — Compensation Event', prompt: 'Write a Compensation Event notification under NEC4. Identify the event, the relevant compensation event clause, and provide a preliminary assessment of time and cost impact.' },
+    { label: 'Contractor Default Notice', prompt: 'Prepare a formal notification of contractor default under the contract. Specify the nature of the default, reference the relevant clause, and state the required corrective actions and timeframe.' },
+    { label: 'Termination Warning — Breach', prompt: 'Draft a warning notice of potential termination for breach of contract. Detail the breaches identified, the cure period allowed, and the consequences if the breach is not remedied within the specified time.' },
+  ],
+  claim: [
+    { label: 'Claim Submission — Entitlement', prompt: 'Draft a formal claim submission with a detailed entitlement analysis. Identify the cause of the claim, the contractual basis, the events timeline, and the relief sought.' },
+    { label: 'Claim Notification — Preliminary Quantum', prompt: 'Write a claim notification letter providing preliminary quantum estimation. State the cause, contractual basis, estimated financial impact, and confirm that detailed quantification will follow.' },
+    { label: 'Claim Report — Schedule Impact', prompt: 'Prepare a detailed claim report focusing on schedule impact analysis. Include as-built programme, delay analysis methodology, critical path assessment, and the claimed extension of time.' },
+    { label: 'Claim Response — Rejection', prompt: 'Draft a claim response letter rejecting an unsubstantiated claim. Address each element of the claim, provide counter-evidence, and explain why the claimed entitlement does not arise under the contract.' },
+  ],
+  correspondence: [
+    { label: 'Meeting Minutes Follow-Up', prompt: 'Draft a formal follow-up letter summarizing meeting minutes. List key decisions made, action items with responsible parties and deadlines, and confirm agreement on next steps.' },
+    { label: 'Stakeholder Update', prompt: 'Write a stakeholder update letter on project progress. Cover completed milestones, current activities, upcoming works, and any risks or issues requiring stakeholder awareness.' },
+    { label: 'Section Handover Letter', prompt: 'Prepare a handover letter for a completed section of works. Confirm completion, list outstanding minor items, attach relevant certificates, and request formal acceptance.' },
+    { label: 'General Inquiry — Engineer', prompt: 'Draft a general inquiry letter to the engineer. State the subject clearly, provide relevant background, ask specific questions, and request a timely response to avoid programme impact.' },
+  ],
+};
+
 class AiDrafting extends React.Component {
   constructor(props) {
     super(props);
@@ -36,7 +106,6 @@ class AiDrafting extends React.Component {
       currentProjectData: null,
       // data
       sessions: [],
-      templates: [],
       letters: [],
       projects: [],
       messages: [],
@@ -57,6 +126,8 @@ class AiDrafting extends React.Component {
       // sources
       sourcesOpen: false,
       lastSourceDocs: [],
+      // letter type
+      letterType: '',
       // profile
       profile: null,
       // snackbar
@@ -78,7 +149,7 @@ class AiDrafting extends React.Component {
 
   async loadInitial() {
     await this.loadProjects();
-    await Promise.all([this.loadSessions(), this.loadTemplates(), this.loadLetters(), this.loadProfile()]);
+    await Promise.all([this.loadSessions(), this.loadLetters(), this.loadProfile()]);
   }
 
   // ── Data loading ──────────────────────────────────────────
@@ -212,20 +283,24 @@ class AiDrafting extends React.Component {
 
   // ── Sending / generating ──────────────────────────────────
   sendFromEmpty = async () => {
-    const text = this.state.emptyInput.trim();
+    let text = this.state.emptyInput.trim();
     if (!text) return;
     if (!this.state.currentLetterId) { this.toast('Please select a letter first — click the + button', 'warning'); return; }
     if (!this.state.currentSessionId) { await this.ensureSession(); if (!this.state.currentSessionId) return; }
+    const lt = LETTER_TYPES.find(t => t.value === this.state.letterType);
+    if (lt) text = `[Letter Type: ${lt.label}] ${text}`;
     this.setState({ activeView: true, emptyInput: '' });
     await this.sendAndGenerate(text);
   };
 
   sendMessage = async () => {
     if (this.state.isGenerating) return;
-    const text = this.state.activeInput.trim();
+    let text = this.state.activeInput.trim();
     if (!text) return;
     if (!this.state.currentLetterId) { this.toast('Please attach a letter first — click the + button', 'warning'); return; }
     if (!this.state.currentSessionId) { await this.ensureSession(); if (!this.state.currentSessionId) return; }
+    const lt = LETTER_TYPES.find(t => t.value === this.state.letterType);
+    if (lt) text = `[Letter Type: ${lt.label}] ${text}`;
     this.setState({ activeInput: '' });
     await this.sendAndGenerate(text);
   };
@@ -672,6 +747,22 @@ class AiDrafting extends React.Component {
                     width: '100%', bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '16px',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden',
                   }}>
+                    <Box sx={{ px: 2, pt: 1.5, pb: 0 }}>
+                      <FormControl size="small" fullWidth>
+                        <InputLabel sx={{ fontSize: 13 }}>Project Letter Type</InputLabel>
+                        <Select
+                          value={this.state.letterType}
+                          label="Project Letter Type"
+                          onChange={(e) => this.setState({ letterType: e.target.value })}
+                          sx={{ fontSize: 13, borderRadius: '10px' }}
+                        >
+                          <MenuItem value="" sx={{ fontSize: 13 }}><em>None</em></MenuItem>
+                          {LETTER_TYPES.map(t => (
+                            <MenuItem key={t.value} value={t.value} sx={{ fontSize: 13 }}>{t.label}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
                     <Box sx={{ display: 'flex', alignItems: 'flex-end', px: 1, py: 1 }}>
                       <IconButton onClick={this.openLetterPicker} title="Attach letter"
                         sx={{ color: '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, mr: 0.5 }}>
@@ -709,23 +800,37 @@ class AiDrafting extends React.Component {
                     </Box>
                   </Box>
 
-                  {/* Template chips */}
-                  {templates.length > 0 && (
-                    <Box sx={{ display: 'flex', gap: 1, mt: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
-                      {templates.map((t, i) => (
-                        <Chip
-                          key={i}
-                          variant="outlined"
-                          icon={<SparkleIcon sx={{ fontSize: 14, color: '#7C3AED !important' }} />}
-                          label={t.label}
-                          onClick={() => this.useTemplate(t.prompt_text)}
-                          sx={{
-                            borderRadius: '10px', borderColor: '#E5E7EB', color: '#374151', fontSize: 13,
-                            px: 0.5,
-                            '&:hover': { bgcolor: '#F5F3FF', borderColor: '#7C3AED', color: '#7C3AED' },
-                          }}
-                        />
-                      ))}
+                  {/* Letter type prompts */}
+                  {this.state.letterType && LETTER_TYPE_PROMPTS[this.state.letterType] && (
+                    <Box sx={{ mt: 3, width: '100%' }}>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#6B7280', mb: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Suggested prompts
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {LETTER_TYPE_PROMPTS[this.state.letterType].map((p, i) => (
+                          <Box
+                            key={i}
+                            onClick={() => this.useTemplate(p.prompt)}
+                            sx={{
+                              display: 'flex', alignItems: 'flex-start', gap: 1.5,
+                              p: 1.5, borderRadius: '12px', cursor: 'pointer',
+                              border: '1px solid #E5E7EB', bgcolor: '#FFFFFF',
+                              '&:hover': { bgcolor: '#F5F8FF', borderColor: '#2563EB', boxShadow: '0 2px 8px rgba(37,99,235,0.08)' },
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <SparkleIcon sx={{ fontSize: 16, color: '#7C3AED', mt: 0.25, flexShrink: 0 }} />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', mb: 0.25 }}>
+                                {p.label}
+                              </Typography>
+                              <Typography sx={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                {p.prompt}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        ))}
+                      </Box>
                     </Box>
                   )}
                 </Box>
@@ -790,6 +895,22 @@ class AiDrafting extends React.Component {
                 {/* Composer */}
                 <Box sx={{ bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', px: 3, py: 2 }}>
                   <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+                    <Box sx={{ mb: 1.5 }}>
+                      <FormControl size="small" fullWidth>
+                        <InputLabel sx={{ fontSize: 13 }}>Project Letter Type</InputLabel>
+                        <Select
+                          value={this.state.letterType}
+                          label="Project Letter Type"
+                          onChange={(e) => this.setState({ letterType: e.target.value })}
+                          sx={{ fontSize: 13, borderRadius: '10px' }}
+                        >
+                          <MenuItem value="" sx={{ fontSize: 13 }}><em>None</em></MenuItem>
+                          {LETTER_TYPES.map(t => (
+                            <MenuItem key={t.value} value={t.value} sx={{ fontSize: 13 }}>{t.label}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
                     <Box sx={{ display: 'flex', alignItems: 'flex-end', bgcolor: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '14px', px: 1, py: 0.75, '&:focus-within': { borderColor: '#2563EB', boxShadow: '0 0 0 3px rgba(37,99,235,0.08)' }, transition: 'all 0.15s ease' }}>
                       <IconButton onClick={this.openLetterPicker} title="Switch letter"
                         sx={{ color: '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, mr: 0.5 }}>
