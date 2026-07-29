@@ -463,7 +463,6 @@ class AiDrafting extends React.Component {
           bgcolor: isActive ? '#EFF6FF' : 'transparent',
           borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
           '&:hover': { bgcolor: isActive ? '#EFF6FF' : '#F8FAFC' },
-          '&:hover .session-actions': { opacity: 1 },
         }}
       >
         <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
@@ -474,7 +473,7 @@ class AiDrafting extends React.Component {
             {s.preview || ''}
           </Typography>
         </Box>
-        <Box className="session-actions" sx={{ display: 'flex', gap: 0.25, opacity: isActive ? 1 : 0, transition: 'opacity 0.15s' }}>
+        <Box className="session-actions" sx={{ display: 'flex', gap: 0.25 }}>
           <IconButton size="small" onClick={(e) => this.togglePin(s.id, e)} title={s.is_pinned ? 'Unpin' : 'Pin'}
             sx={{ color: s.is_pinned ? '#2563EB' : '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, p: 0.5 }}>
             <PinIcon sx={{ fontSize: 15 }} />

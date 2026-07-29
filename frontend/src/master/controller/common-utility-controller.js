@@ -353,6 +353,9 @@ class CommonUtilityController extends React.Component {
       async saveUserRoles(data) {
             return await new base().httpPost("/common/saveUserRoles", data)
       }
+      async saveUserRoleDetails(data) {
+            return await new base().httpPost("/common/saveUserRoleDetails", data)
+      }
       async getUserRoles(userId) {
             return await new base().httpGet("/common/getUserRoles?userId=" + userId);
       }
@@ -367,6 +370,9 @@ class CommonUtilityController extends React.Component {
 
       async deleteUserRoles(data) {
             return await new base().httpPost("/common/deleteUserRoles", data);
+      }
+      async deleteUserRoleDetails(data) {
+            return await new base().httpPost("/common/deleteUserRoleDetails", data);
       }
       // ==============End User Roles=============
     //==========USER Logs=============

@@ -1,5 +1,8 @@
 """
 Database engine, session factory, and dependency injection for FastAPI.
+
+Schema management is handled by Alembic migrations (backend/alembic/).
+init_db() retains data-seeding responsibilities only.
 """
 
 import structlog
@@ -58,39 +61,20 @@ async def get_db():
 
 
 async def init_db():
-    """Initialize database and create all tables."""
+    """Ensure tables exist and seed RBAC data.
+
+    Schema changes are managed by Alembic migrations. This function:
+    1. Creates tables that don't yet exist (safe — does not alter existing tables).
+    2. Seeds roles, modules, and permissions if they don't exist.
+
+    NOTE: After Phase 2 of the restructure, `create_all` can be removed entirely
+    since Alembic will own all DDL. For now it remains as a safety net for
+    fresh database bootstrap.
+    """
     import backend.models  # Ensure models are registered with Base.metadata
-    from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        logger.info("db.tables_created")
+        logger.info("db.tables_created_or_verified")
 
         from backend.db_seed import seed_rbac
         await seed_rbac(conn)
-
-        result = await conn.execute(
-            text("SELECT column_name FROM information_schema.columns "
-                 "WHERE table_name='knowledge_documents' AND column_name='storage_path'")
-        )
-        if not result.fetchone():
-            logger.info("db.adding_column", table="knowledge_documents", column="storage_path")
-            await conn.execute(text(
-                "ALTER TABLE knowledge_documents ADD COLUMN storage_path VARCHAR(500)"
-            ))
-
-        # Add master-data status columns idempotently (create_all does not ALTER)
-        for tbl in ("departments", "locations", "designations", "units", "lookups"):
-            await conn.execute(text(
-                f'ALTER TABLE "Master".{tbl} ADD COLUMN IF NOT EXISTS status VARCHAR(10) DEFAULT \'1\''
-            ))
-
-        # Run master schema consolidation migration if master tables exist
-        master_tables_exist = await conn.execute(
-            text("SELECT EXISTS (SELECT FROM information_schema.tables "
-                 "WHERE table_name = 'master_project')")
-        )
-        if master_tables_exist.scalar():
-            from backend.migrations import _001_consolidate_master_data as migration_001
-            logger.info("db.running_migration_001")
-            await migration_001.run(conn)
-            logger.info("db.migration_001_complete")

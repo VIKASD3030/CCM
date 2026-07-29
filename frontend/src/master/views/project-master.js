@@ -11,7 +11,7 @@ import {
   TextField, MenuItem, Grid, Typography, Tabs, Tab, Divider,
   Backdrop, CircularProgress, Box, Snackbar, Alert, Avatar,
   Tooltip, IconButton, Chip, Stack, Button as MuiButton,
-  Menu, ListItemIcon, ListItemText,
+  Menu, ListItemIcon, ListItemText, InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -21,6 +21,7 @@ import {
   MoreVert as MoreIcon,
   FolderOpen as FolderIcon,
   Business as BusinessIcon,
+  Link as LinkIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import LoginState from '../../authentication/loginState';
@@ -65,7 +66,7 @@ class Project extends Component {
       projectData: {
         ProjectMasterId: 0, ProjectCode: '', ProjectName: '', ClientName: '',
         BusinessUnit: '', BusinessLine: '', ProjectManagerId: '',
-        ProjectDirectorId: '', PMOID: '', Remarks: '', Status: 0,
+        ProjectDirectorId: '', PMOID: '', ProjectDataSource: '', Remarks: '', Status: 0,
       },
       imageFileUrl: '',
 
@@ -105,6 +106,7 @@ class Project extends Component {
         ClientName: true,
         ProjectManagerName: true,
         ProjectDirectorName: true,
+        ProjectDataSource: true,
         Remarks: true,
       },
 
@@ -514,6 +516,34 @@ class Project extends Component {
         },
       },
       {
+        field: 'ProjectDataSource',
+        headerName: 'Data Source',
+        flex: 1,
+        minWidth: 180,
+        renderCell: (params) => {
+          const url = params.value || '';
+          if (!url) return <Typography sx={{ fontSize: 13, color: '#D1D5DB' }}>—</Typography>;
+          return (
+            <Tooltip title={url} arrow placement="top">
+              <Typography
+                component="a"
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  fontSize: 13, color: '#2563EB', textDecoration: 'none',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  display: 'block', maxWidth: '100%',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+              >
+                {url}
+              </Typography>
+            </Tooltip>
+          );
+        },
+      },
+      {
         field: 'Remarks',
         headerName: 'Remarks',
         flex: 1,
@@ -710,6 +740,27 @@ class Project extends Component {
                     <MenuItem value="System">System</MenuItem>
                     <MenuItem value="CTR">CTR</MenuItem>
                   </TextField>
+                </Grid>
+              </Grid>
+
+              <Divider textAlign="left" sx={{ color: '#475569', fontWeight: 600, fontSize: 13, mt: 3, mb: 2, letterSpacing: '0.04em' }}>
+                Data Source
+              </Divider>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12 }}>
+                  <TextField fullWidth size="small" label="Project Data Source (SharePoint Link)"
+                    placeholder="https://yourtenant.sharepoint.com/sites/project-name"
+                    value={projectData.ProjectDataSource || ''}
+                    onChange={(e) => this.handleFieldChange('ProjectDataSource', e.target.value)}
+                    helperText="Paste the SharePoint site or folder link for this project"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LinkIcon sx={{ color: '#9CA3AF', fontSize: 18 }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
                 </Grid>
               </Grid>
 

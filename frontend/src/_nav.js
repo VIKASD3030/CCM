@@ -6,11 +6,11 @@ export default {
       url: '/master',
       icon: 'icon-speedometer',
       children: [
-        {
-          name: 'Dashboard',
-          url: '/master/dashboard',
-          icon: 'icon-drop',
-        },
+        // {
+        //   name: 'Dashboard',
+        //   url: '/master/dashboard',
+        //   icon: 'icon-drop',
+        // },
         {
           name: 'AI Drafting',
           url: '/master/ai-drafting',

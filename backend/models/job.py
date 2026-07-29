@@ -32,7 +32,7 @@ class Job(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3)
     created_by: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID, ForeignKey("users.id", ondelete="SET NULL"), nullable=False
+        PG_UUID, ForeignKey("Master.users.id", ondelete="SET NULL"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 

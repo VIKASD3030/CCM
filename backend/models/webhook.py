@@ -26,7 +26,7 @@ class Webhook(Base):
     events: Mapped[list[str]] = mapped_column(ARRAY(String(50)), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_by: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID, ForeignKey("users.id", ondelete="SET NULL"), nullable=False
+        PG_UUID, ForeignKey("Master.users.id", ondelete="SET NULL"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 

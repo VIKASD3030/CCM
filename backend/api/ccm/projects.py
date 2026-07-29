@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.deps import get_current_user
 from backend.database import get_db
 from backend.models.project import Project
-from backend.models.master_record import MasterRecord
+from backend.models.project_master import ProjectMaster
 from backend.models.sharepoint_sync import SharePointSyncLog
 from backend.models.user import User
 
@@ -28,23 +28,21 @@ async def list_projects(
     result = await db.execute(stmt)
     ccm_projects = [p.to_dict() for p in result.scalars().all()]
 
-    # 2. Master module projects (from master_records, entity="project_master")
-    stmt2 = select(MasterRecord).where(
-        MasterRecord.entity == "project_master",
-        MasterRecord.status != "9",
-    ).order_by(MasterRecord.id)
+    # 2. Master module projects (from Master.project_master table)
+    stmt2 = select(ProjectMaster).where(
+        ProjectMaster.status != "9",
+    ).order_by(ProjectMaster.id)
     result2 = await db.execute(stmt2)
     master_rows = result2.scalars().all()
 
     for row in master_rows:
-        data = row.data or {}
         ccm_projects.append({
             "id": f"master-{row.id}",
-            "name": data.get("ProjectName") or data.get("ProjectCode") or f"Project #{row.id}",
-            "project_code": data.get("ProjectCode"),
-            "client_name": data.get("ClientName"),
-            "business_unit": data.get("BusinessUnit"),
-            "business_line": data.get("BusinessLine"),
+            "name": row.project_name or row.project_code or f"Project #{row.id}",
+            "project_code": row.project_code,
+            "client_name": row.client_name,
+            "business_unit": row.business_unit,
+            "business_line": row.business_line,
             "sharepoint_site_id": None,
             "status": "active",
             "created_at": row.created_at.isoformat() if row.created_at else None,

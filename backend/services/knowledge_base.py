@@ -1,7 +1,7 @@
 """
 Phase 1 — Knowledge Base Service.
 Handles document upload, text extraction, chunking, embedding, and vector search.
-PostgreSQL 16 with in-Python cosine similarity for vector search.
+PostgreSQL 16 + pgvector for native vector similarity search.
 """
 import uuid
 import structlog
@@ -13,7 +13,7 @@ from backend.services.webhook_service import dispatch_event
 from backend.services.storage import storage_backend
 from backend.services import openai_client
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger()
@@ -235,7 +235,7 @@ async def ingest_document(
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two vectors."""
+    """Compute cosine similarity between two vectors. Kept as fallback."""
     import math
     dot = sum(x * y for x, y in zip(a, b))
     norm_a = math.sqrt(sum(x * x for x in a))
@@ -255,7 +255,7 @@ async def search_similar_chunks(
     user_role: str = None,
 ) -> list[dict]:
     """
-    Semantic search using in-Python cosine similarity over stored embeddings.
+    Semantic search using pgvector native <=> (cosine distance) operator.
     Scoped to project_id if provided — no cross-project retrieval by default.
     """
     query_embeddings = await generate_embeddings([query_text])
@@ -263,43 +263,54 @@ async def search_similar_chunks(
         return []
 
     query_vec = query_embeddings[0]
+    query_vec_literal = "[" + ",".join(str(v) for v in query_vec) + "]"
 
-    stmt = select(DocumentChunk).join(
-        KnowledgeDocument, DocumentChunk.document_id == KnowledgeDocument.id
-    ).where(KnowledgeDocument.status == "indexed")
+    where_clauses = ["kd.status = 'indexed'"]
+    params: dict = {"query_embedding": query_vec_literal, "top_k": top_k}
 
     if project_id:
-        stmt = stmt.where(KnowledgeDocument.project_id == project_id)
+        where_clauses.append("kd.project_id = :project_id")
+        params["project_id"] = str(project_id)
 
     if user_role != "admin" and user_id is not None:
-        stmt = stmt.where(KnowledgeDocument.uploaded_by == user_id)
+        where_clauses.append("kd.uploaded_by = :user_id")
+        params["user_id"] = str(user_id)
 
     if category:
-        stmt = stmt.where(KnowledgeDocument.category == category)
+        where_clauses.append("kd.category = :category")
+        params["category"] = category
 
-    result = await db.execute(stmt)
-    chunks = result.scalars().all()
+    where_sql = " AND ".join(where_clauses)
 
-    scored = []
-    for chunk in chunks:
-        if chunk.embedding is None:
-            continue
-        sim = cosine_similarity(query_vec, chunk.embedding)
-        scored.append((sim, chunk))
+    sql = text(f"""
+        SELECT 
+            dc.id AS chunk_id,
+            dc.document_id,
+            dc.chunk_text,
+            dc.chunk_index,
+            (dc.embedding <=> :query_embedding::vector) AS distance,
+            dc.metadata
+        FROM document_chunks dc
+        JOIN knowledge_documents kd ON dc.document_id = kd.id
+        WHERE {where_sql}
+            AND dc.embedding IS NOT NULL
+        ORDER BY dc.embedding <=> :query_embedding::vector
+        LIMIT :top_k
+    """)
 
-    scored.sort(key=lambda x: x[0], reverse=True)
-    scored = scored[:top_k]
+    result = await db.execute(sql, params)
+    rows = result.fetchall()
 
     return [
         {
-            "chunk_id": str(chunk.id),
-            "document_id": str(chunk.document_id),
-            "chunk_text": chunk.chunk_text,
-            "chunk_index": chunk.chunk_index,
-            "similarity": round(sim, 4),
-            "metadata": chunk.metadata_ if chunk.metadata_ else {},
+            "chunk_id": str(row.chunk_id),
+            "document_id": str(row.document_id),
+            "chunk_text": row.chunk_text,
+            "chunk_index": row.chunk_index,
+            "similarity": round(1.0 - float(row.distance), 4),
+            "metadata": row.metadata if row.metadata else {},
         }
-        for sim, chunk in scored
+        for row in rows
     ]
 
 

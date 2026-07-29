@@ -9,12 +9,11 @@ Contract (verified against the React frontend base-controller + views):
   * isRecordExists returns {"status": 1|0} (object, not array)
 """
 from typing import Any
+from datetime import datetime
 
-from sqlalchemy import select, delete as sa_delete, String as SaString
+from sqlalchemy import select, delete as sa_delete, String as SaString, Boolean as SaBoolean, DateTime as SaDateTime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import Integer, Numeric, Float
-
-from backend.models.master_record import MasterRecord
 
 
 # ─── Real-model helpers (departments, locations, lookups, ...) ──────────────
@@ -32,7 +31,7 @@ async def refresh_list(db: AsyncSession, model, filters: dict | None = None, ord
     result = await db.execute(stmt)
     rows = result.scalars().all()
 
-    id_name_map = {r.id: r.name for r in rows}
+    id_name_map = {r.id: getattr(r, 'name', getattr(r, 'lookup_name', None)) for r in rows}
     parent_id_key = f"Parent{model.__name__}Id"
     parent_name_key = f"Parent{model.__name__}Name"
 
@@ -57,22 +56,38 @@ async def upsert_model(db: AsyncSession, model, body: dict, pk_field: str, field
         db.add(obj)
     mapper = model.__mapper__
     for body_key, col in field_map.items():
-        if body_key in body:
-            value = body[body_key]
-            col_type = mapper.columns[col].type
-            if isinstance(col_type, Integer) and not isinstance(value, (int, float)):
-                try:
-                    value = int(value)
-                except (TypeError, ValueError):
-                    value = 0
-            elif isinstance(col_type, (Numeric, Float)) and not isinstance(value, (int, float)):
-                try:
-                    value = float(value)
-                except (TypeError, ValueError):
-                    value = 0.0
-            elif isinstance(col_type, SaString) and isinstance(value, (int, float)):
-                value = str(value)
-            setattr(obj, col, value)
+        if body_key not in body:
+            continue
+        value = body[body_key]
+        column = mapper.columns[col]
+        col_type = column.type
+        if column.foreign_keys and value in (None, "", 0, "0"):
+            value = None
+        if value == "":
+            if isinstance(col_type, (Integer, Numeric, Float)):
+                value = 0
+            elif isinstance(col_type, SaDateTime):
+                value = None
+        if value is not None and isinstance(col_type, Integer) and not isinstance(value, (int, float)):
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                value = 0
+        elif value is not None and isinstance(col_type, (Numeric, Float)) and not isinstance(value, (int, float)):
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                value = 0.0
+        elif value is not None and isinstance(col_type, SaBoolean) and not isinstance(value, bool):
+            if isinstance(value, str):
+                value = value.strip().lower() in ("1", "true", "yes", "y", "on")
+            else:
+                value = bool(value)
+        elif value is not None and isinstance(col_type, SaDateTime) and isinstance(value, str):
+            value = _parse_datetime(value)
+        elif value is not None and isinstance(col_type, SaString) and isinstance(value, (int, float)):
+            value = str(value)
+        setattr(obj, col, value)
     await db.flush()
     return obj
 
@@ -83,63 +98,73 @@ async def delete_model(db: AsyncSession, model, pk):
         await db.flush()
 
 
-# ─── Generic MasterRecord helpers (contractors, contracts, activities, ...) ─
+async def soft_delete_model(db: AsyncSession, model, pk):
+    if isinstance(pk, str):
+        pk = int(pk) if pk.strip() else 0
+    if not pk:
+        return
+    obj = await db.get(model, pk)
+    if obj is not None and hasattr(obj, "status"):
+        obj.status = "9"
+        await db.flush()
+async def list_exists(rows: list[dict], record: dict, id_key: str, ignore_keys: set[str] | None = None) -> dict:
+    ignore = {
+        id_key,
+        "key",
+        "Status",
+        "CreatedBy",
+        "CreatedDate",
+        "LockedBy",
+        "LockedDate",
+        "SecurityId",
+        "LastUpdatedBy",
+        "LastUpdatedDate",
+    }
+    if ignore_keys:
+        ignore.update(ignore_keys)
 
-async def mr_list(db: AsyncSession, entity: str, id_key: str, filters: dict | None = None):
-    stmt = select(MasterRecord).where(MasterRecord.entity == entity)
-    result = await db.execute(stmt.order_by(MasterRecord.id))
-    rows = [r for r in result.scalars().all() if (r.status or "1") != "9"]
-    out = [r.to_dict(id_key) for r in rows]
-    if filters:
-        for k, v in filters.items():
-            if v not in (None, "", 0):
-                out = [d for d in out if str(d.get(k)) == str(v)]
-    return out
+    current_id = _normalize_scalar(record.get(id_key))
+    match = {
+        key: value
+        for key, value in (record or {}).items()
+        if key not in ignore and value not in (None, "", [], {})
+    }
+    if not match:
+        return {"status": 0}
 
-
-async def mr_save(db: AsyncSession, entity: str, id_key: str, body: dict):
-    """Upsert a generic master record. PK comes from body[id_key]."""
-    rid = body.get(id_key) or 0
-    if isinstance(rid, str):
-        rid = int(rid) if rid.strip() else 0
-    payload = {k: v for k, v in body.items() if k not in (id_key, "key")}
-    status = str(body.get("Status", "1")) or "1"
-    obj = await db.get(MasterRecord, rid) if rid else None
-    if obj is None or obj.entity != entity:
-        obj = MasterRecord(entity=entity, data=payload, status=status)
-        db.add(obj)
-    else:
-        obj.data = payload
-        obj.status = status
-    await db.flush()
-    return await mr_list(db, entity, id_key)
-
-
-async def mr_save_bulk(db: AsyncSession, entity: str, id_key: str, rows: list[dict]):
-    for row in rows or []:
-        payload = {k: v for k, v in row.items() if k not in (id_key, "key")}
-        db.add(MasterRecord(entity=entity, data=payload, status=str(row.get("Status", "1")) or "1"))
-    await db.flush()
-    return await mr_list(db, entity, id_key)
-
-
-async def mr_delete(db: AsyncSession, entity: str, id_key: str, body: dict):
-    """Soft-delete (Status=9) a generic master record by id."""
-    rid = body.get(id_key) or 0
-    if isinstance(rid, str):
-        rid = int(rid) if rid.strip() else 0
-    if rid:
-        obj = await db.get(MasterRecord, rid)
-        if obj is not None and obj.entity == entity:
-            obj.status = "9"
-            await db.flush()
-    return await mr_list(db, entity, id_key)
-
-
-async def mr_exists(db: AsyncSession, entity: str, match: dict) -> dict:
-    """Return {"status": 1} if a non-deleted record matches all `match` fields."""
-    rows = await mr_list(db, entity, "Id")
-    for d in rows:
-        if all(str(d.get(k)) == str(v) for k, v in match.items()):
+    for row in rows:
+        if current_id and _normalize_scalar(row.get(id_key)) == current_id:
+            continue
+        if all(_normalize_scalar(row.get(key)) == _normalize_scalar(value) for key, value in match.items()):
             return {"status": 1}
     return {"status": 0}
+
+
+def _parse_datetime(value: str | None):
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%d",
+    ):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _normalize_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return "" if value is None else str(value).strip()

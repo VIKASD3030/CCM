@@ -17,7 +17,7 @@ class PasswordResetToken(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID, ForeignKey("Master.users.id", ondelete="CASCADE"), nullable=False
     )
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

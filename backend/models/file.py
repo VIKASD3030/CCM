@@ -31,7 +31,7 @@ class FileRecord(Base):
         server_default='local'
     )
     uploaded_by: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID, ForeignKey("users.id", ondelete="SET NULL"), nullable=False
+        PG_UUID, ForeignKey("Master.users.id", ondelete="SET NULL"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 

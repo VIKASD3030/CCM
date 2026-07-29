@@ -18,7 +18,7 @@ class EmailNotificationSetting(Base):
     __tablename__ = "email_notification_settings"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        PG_UUID, ForeignKey("Master.users.id", ondelete="CASCADE"), primary_key=True
     )
     on_review_needed: Mapped[bool] = mapped_column(Boolean, default=True)
     on_draft_approved: Mapped[bool] = mapped_column(Boolean, default=True)

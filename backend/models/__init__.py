@@ -26,7 +26,28 @@ from backend.models.department import Department
 from backend.models.location import Location
 from backend.models.designation import Designation
 from backend.models.unit import Unit
-from backend.models.master_record import MasterRecord
+from backend.models.contractor import Contractor
+from backend.models.project_master import ProjectMaster
+from backend.models.activity_group import ActivityGroup
+from backend.models.activity import Activity
+from backend.models.work_package import WorkPackage
+from backend.models.common_role import CommonRole
+from backend.models.role_right import RoleRight
+from backend.models.contract import Contract
+from backend.models.module_group import ModuleGroup
+from backend.models.ui_module import UiModule
+from backend.models.user_log import UserLog
+from backend.models.error_log import ErrorLog
+from backend.models.reference_document import ReferenceDocument
+from backend.models.project_detail import ProjectDetail
+from backend.models.directory_user import DirectoryUser
+from backend.models.user_role import UserRole
+from backend.models.user_access_filter import UserAccessFilter
+from backend.models.approver_role import ApproverRole
+from backend.models.variation_order import VariationOrder
+from backend.models.auto_notification import AutoNotification
+from backend.models.monthly_breakup import MonthlyBreakup
+from backend.models.estimation_month import EstimationMonth
 
 __all__ = [
     "KnowledgeDocument",
@@ -55,5 +76,27 @@ __all__ = [
     "Location",
     "Designation",
     "Unit",
-    "MasterRecord",
+    "Contractor",
+    "ProjectMaster",
+    "ActivityGroup",
+    "Activity",
+    "WorkPackage",
+    "CommonRole",
+    "RoleRight",
+    "Contract",
+    "ModuleGroup",
+    "UiModule",
+    "UserLog",
+    "ErrorLog",
+    "ReferenceDocument",
+    "ProjectDetail",
+    "DirectoryUser",
+    "UserRole",
+    "UserAccessFilter",
+    "ApproverRole",
+    "VariationOrder",
+    "AutoNotification",
+    "MonthlyBreakup",
+    "EstimationMonth",
 ]
+

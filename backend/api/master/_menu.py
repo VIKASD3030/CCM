@@ -14,7 +14,7 @@ stays self-contained and removable.
 # (group_id, group_name, [(label, route_path), ...]). Paths match frontend/src/routes.js.
 _GROUPS = [
     (10, "CCM", [
-        ("Dashboard", "/master/dashboard"),
+        # ("Dashboard", "/master/dashboard"),
         ("AI Drafting", "/master/ai-drafting"),
     ]),
     (1, "Masters", [

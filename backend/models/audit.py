@@ -31,7 +31,7 @@ class AuditEntry(Base):
         default=lambda: datetime.now(timezone.utc)
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        PG_UUID, ForeignKey("Master.users.id", ondelete="SET NULL"), nullable=True
     )
     action: Mapped[str] = mapped_column(Text, nullable=False)
     entity_type: Mapped[str] = mapped_column(String(100), nullable=False)

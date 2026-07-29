@@ -55,6 +55,7 @@ class ViewProject extends Component {
     { title: 'Project Name', key: 'ProjectName', dataIndex: 'ProjectName', sorter: (a, b) => a.ProjectName.localeCompare(b.ProjectName), ...new TableHelper().getColumnSearchProps('ProjectName') },
     { title: 'Parent Project', key: 'ParentProjectName', dataIndex: 'ParentProjectName', sorter: (a, b) => a.ProjectName.localeCompare(b.ParentProjectName), ...new TableHelper().getColumnSearchProps('ParentProjectName') },
     { title: 'Remarks', key: 'Remarks', dataIndex: 'Remarks', sorter: (a, b) => a.Remarks.localeCompare(b.Remarks), ...new TableHelper().getColumnSearchProps('Remarks') },
+    { title: 'Data Source', key: 'ProjectDataSource', dataIndex: 'ProjectDataSource', sorter: (a, b) => (a.ProjectDataSource || '').localeCompare(b.ProjectDataSource || ''), ...new TableHelper().getColumnSearchProps('ProjectDataSource') },
   ];
 
   gridColumns = [
@@ -62,6 +63,7 @@ class ViewProject extends Component {
     { field: 'ProjectName', headerName: 'Project Name', flex: 1.6, minWidth: 200 },
     { field: 'ParentProjectName', headerName: 'Parent Project', flex: 1.2, minWidth: 170 },
     { field: 'Remarks', headerName: 'Remarks', flex: 1.4, minWidth: 180 },
+    { field: 'ProjectDataSource', headerName: 'Data Source', flex: 1.2, minWidth: 180 },
   ];
 
   render() {

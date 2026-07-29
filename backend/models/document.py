@@ -7,8 +7,8 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import String, Text, Integer, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB, ARRAY
-from sqlalchemy.types import Float
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.project import Project
@@ -86,7 +86,7 @@ class DocumentChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(ARRAY(Float), nullable=True)
+    embedding = mapped_column(Vector(1536), nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, default=dict)
 
     # Relationship back to document
