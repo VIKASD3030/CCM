@@ -49,9 +49,6 @@ from backend.api.master.users import router as users_router
 from backend.api.master.projects_master import router as projects_master_router
 from backend.api.master.contractors import router as contractors_router
 from backend.api.master.contracts import router as contracts_router
-from backend.api.master.activities import router as activities_router
-from backend.api.master.variation_orders import router as variation_orders_router
-from backend.api.master.monthly_breakup import router as monthly_breakup_router
 from backend.api.master.notifications_auto import router as notifications_auto_router
 from backend.api.master.logs import router as logs_router
 from backend.api.master.misc import router as misc_router
@@ -229,9 +226,6 @@ app.include_router(users_router)
 app.include_router(projects_master_router)
 app.include_router(contractors_router)
 app.include_router(contracts_router)
-app.include_router(activities_router)
-app.include_router(variation_orders_router)
-app.include_router(monthly_breakup_router)
 app.include_router(notifications_auto_router)
 app.include_router(logs_router)
 app.include_router(misc_router)

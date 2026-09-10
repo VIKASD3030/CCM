@@ -30,20 +30,6 @@ Notes:
 | POST | `/common/SaveUnitBulkDetails` | `Unit` | `Master.units` | Bulk upsert |
 | POST | `/common/deleteUnitDetails` | `Unit` | `Master.units` | Hard delete helper |
 
-## Activities / Work Packages
-
-| Method | Route | Model | Physical Table | Notes |
-|---|---|---|---|---|
-| GET | `/common/getActivityGroup` | `ActivityGroup` | `Master.activity_groups` | |
-| POST | `/common/saveActivityGroupDetails` | `ActivityGroup` | `Master.activity_groups` | Soft delete pattern via `status` |
-| POST | `/common/deleteActivityGroupDetails` | `ActivityGroup` | `Master.activity_groups` | Soft delete |
-| GET | `/common/getActivity` | `Activity` | `Master.activities` | |
-| GET | `/common/getSubActivity` | `Activity` | `Master.activities` | Filtered by `IsSubActivity` |
-| POST | `/common/saveActivityDetails` | `Activity` | `Master.activities` | |
-| POST | `/common/saveActivityBulkDetails` | `Activity` | `Master.activities` | Bulk upsert |
-| POST | `/common/deleteActivityDetails` | `Activity` | `Master.activities` | Soft delete |
-| GET | `/common/getWorkPackage` | `WorkPackage` | `Master.work_packages` | |
-
 ## Contractors / Contracts
 
 | Method | Route | Model | Physical Table | Notes |
@@ -118,22 +104,6 @@ These are the admin-panel directory tables, not the actual auth login user table
 | POST | `/common/saveUserLogDetails` | `UserLog` | `Master.user_logs` | Used by auth/session flows |
 | POST | `/common/getErrorLogs` | `ErrorLog` | `Master.error_logs` | |
 
-## Reference Documents / Misc
-
-| Method | Route | Model | Physical Table | Notes |
-|---|---|---|---|---|
-| GET | `/common/getDocuments` | `ReferenceDocument` | `Master.reference_documents` | |
-| POST | `/common/saveDocuments` | `ReferenceDocument` | `Master.reference_documents` | |
-| POST | `/common/deleteDocuments` | `ReferenceDocument` | `Master.reference_documents` | Soft delete |
-
-## Variation Orders
-
-| Method | Route | Model | Physical Table | Notes |
-|---|---|---|---|---|
-| GET | `/common/getVariationOrderDetails` | `VariationOrder` | `Master.variation_orders` | |
-| POST | `/common/saveVariationOrderData` | `VariationOrder` | `Master.variation_orders` | |
-| POST | `/common/deleteVariationOrderData` | `VariationOrder` | `Master.variation_orders` | Soft delete |
-
 ## Auto Notifications
 
 | Method | Route | Model | Physical Table | Notes |
@@ -141,15 +111,6 @@ These are the admin-panel directory tables, not the actual auth login user table
 | GET | `/common/GetAutoNotification` | `AutoNotification` | `Master.auto_notifications` | Supports both `NotificationName` and legacy `NotificaionName` payload key |
 | POST | `/common/saveAutoNotificationDetails` | `AutoNotification` | `Master.auto_notifications` | |
 | POST | `/common/deleteAutoNotificationDetails` | `AutoNotification` | `Master.auto_notifications` | Soft delete |
-
-## Monthly Breakup
-
-| Method | Route | Model | Physical Table | Notes |
-|---|---|---|---|---|
-| POST | `/common/getMonthlyBreakUpDetailsData` | `MonthlyBreakup` + `EstimationMonth` | `Master.monthly_breakups` + `Master.estimation_months` | Returns `{ parentData, childData }` |
-| POST | `/common/saveMonthlyBreakUpDetailsData` | `MonthlyBreakup` + `EstimationMonth` | `Master.monthly_breakups` + `Master.estimation_months` | Saves parent, replaces child rows |
-| POST | `/common/deleteMontlyBreakUpDetailsData` | `MonthlyBreakup` + `EstimationMonth` | `Master.monthly_breakups` + `Master.estimation_months` | Soft deletes parent and child rows |
-| GET | `/common/getEstimationMonths` | `EstimationMonth` | `Master.estimation_months` | Flat child row list |
 
 ## Auth RBAC API (`/api/roles`)
 
