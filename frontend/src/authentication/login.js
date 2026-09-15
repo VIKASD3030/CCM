@@ -244,7 +244,10 @@ class Login extends React.Component {
               if (isUnauthenticated || isInProgress) {
                 return (
                   <div>
-                    <div className="login-page-container">
+                    <div
+                      className="login-page-container"
+                      style={{ backgroundImage: `url(${import.meta.env.BASE_URL}img/login-bg.png)` }}
+                    >
                       <Card sx={{ maxWidth: 420, mx: 'auto', borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', position: 'relative', zIndex: 2 }}>
                         <CardContent sx={{ p: 4 }}>
                           <Stack spacing={3} alignItems="center">
