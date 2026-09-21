@@ -28,37 +28,39 @@ import {
 } from '@mui/icons-material'
 import './modern-sidebar.css'
 
-/* ── Icon resolver ────────────────────────────────────────────────────── */
+/* ── Icon resolver ────────────────────────────────────────────────────────
+   Each module/sub-module gets its own colour so the sidebar reads at a
+   glance (see the reference screenshot) instead of one flat, muted tone. ── */
 const sectionIcons = {
-  CCM: <DashboardRounded sx={{ fontSize: 18 }} />,
-  Master: <AppsRounded sx={{ fontSize: 18 }} />,
-  Admin: <SettingsRounded sx={{ fontSize: 18 }} />,
+  CCM: <DashboardRounded sx={{ fontSize: 18, color: '#818CF8' }} />,       // indigo
+  MASTER: <AppsRounded sx={{ fontSize: 18, color: '#FBBF24' }} />,          // amber
+  Admin: <AdminPanelSettingsRounded sx={{ fontSize: 18, color: '#F87171' }} />, // red
 }
 
 const itemIconMap = {
-  '/master/dashboard': <DashboardRounded sx={{ fontSize: 18 }} />,
-  '/master/ai-drafting': <AutoAwesomeRounded sx={{ fontSize: 18 }} />,
-  '/master/project-master': <FolderOpenRounded sx={{ fontSize: 18 }} />,
-  '/master/view-project-master': <FolderOpenRounded sx={{ fontSize: 18 }} />,
-  '/master/department-master': <ApartmentRounded sx={{ fontSize: 18 }} />,
-  '/master/view-department-master': <ApartmentRounded sx={{ fontSize: 18 }} />,
-  '/master/designation-master': <BadgeRounded sx={{ fontSize: 18 }} />,
-  '/master/view-designation-master': <BadgeRounded sx={{ fontSize: 18 }} />,
-  '/master/user-master': <GroupRounded sx={{ fontSize: 18 }} />,
-  '/master/view-user-master': <GroupRounded sx={{ fontSize: 18 }} />,
-  '/master/role-master': <SecurityRounded sx={{ fontSize: 18 }} />,
-  '/master/view-role-master': <SecurityRounded sx={{ fontSize: 18 }} />,
-  '/master/user-role-master': <ManageAccountsRounded sx={{ fontSize: 18 }} />,
-  '/master/view-user-role-master': <ManageAccountsRounded sx={{ fontSize: 18 }} />,
-  '/master/role-right-master': <AdminPanelSettingsRounded sx={{ fontSize: 18 }} />,
-  '/master/view-role-right-master': <AdminPanelSettingsRounded sx={{ fontSize: 18 }} />,
-  '/master/module-group-master': <Inventory2Rounded sx={{ fontSize: 18 }} />,
-  '/master/view-module-group-master': <Inventory2Rounded sx={{ fontSize: 18 }} />,
-  '/master/module-master': <ViewModuleRounded sx={{ fontSize: 18 }} />,
-  '/master/view-module-master': <ViewModuleRounded sx={{ fontSize: 18 }} />,
+  '/master/dashboard': <DashboardRounded sx={{ fontSize: 18, color: '#60A5FA' }} />,
+  '/master/ai-drafting': <AutoAwesomeRounded sx={{ fontSize: 18, color: '#A78BFA' }} />,
+  '/master/project-master': <FolderOpenRounded sx={{ fontSize: 18, color: '#34D399' }} />,
+  '/master/view-project-master': <FolderOpenRounded sx={{ fontSize: 18, color: '#34D399' }} />,
+  '/master/department-master': <ApartmentRounded sx={{ fontSize: 18, color: '#F472B6' }} />,
+  '/master/view-department-master': <ApartmentRounded sx={{ fontSize: 18, color: '#F472B6' }} />,
+  '/master/designation-master': <BadgeRounded sx={{ fontSize: 18, color: '#FBBF24' }} />,
+  '/master/view-designation-master': <BadgeRounded sx={{ fontSize: 18, color: '#FBBF24' }} />,
+  '/master/user-master': <GroupRounded sx={{ fontSize: 18, color: '#4ADE80' }} />,
+  '/master/view-user-master': <GroupRounded sx={{ fontSize: 18, color: '#4ADE80' }} />,
+  '/master/role-master': <SecurityRounded sx={{ fontSize: 18, color: '#F87171' }} />,
+  '/master/view-role-master': <SecurityRounded sx={{ fontSize: 18, color: '#F87171' }} />,
+  '/master/user-role-master': <ManageAccountsRounded sx={{ fontSize: 18, color: '#C084FC' }} />,
+  '/master/view-user-role-master': <ManageAccountsRounded sx={{ fontSize: 18, color: '#C084FC' }} />,
+  '/master/role-right-master': <AdminPanelSettingsRounded sx={{ fontSize: 18, color: '#22D3EE' }} />,
+  '/master/view-role-right-master': <AdminPanelSettingsRounded sx={{ fontSize: 18, color: '#22D3EE' }} />,
+  '/master/module-group-master': <Inventory2Rounded sx={{ fontSize: 18, color: '#38BDF8' }} />,
+  '/master/view-module-group-master': <Inventory2Rounded sx={{ fontSize: 18, color: '#38BDF8' }} />,
+  '/master/module-master': <ViewModuleRounded sx={{ fontSize: 18, color: '#FB923C' }} />,
+  '/master/view-module-master': <ViewModuleRounded sx={{ fontSize: 18, color: '#FB923C' }} />,
 }
 
-const fallbackIcon = <SettingsRounded sx={{ fontSize: 18 }} />
+const fallbackIcon = <SettingsRounded sx={{ fontSize: 18, color: '#94A3B8' }} />
 
 function getItemIcon(url) {
   if (url && itemIconMap[url]) return itemIconMap[url]
@@ -71,7 +73,16 @@ function getSubIcon(url) {
 
 /* ── Component ─────────────────────────────────────────────────────────── */
 export function ModernSidebar({ isOpen = true, onToggle, menuItems = [], onNavigate }) {
-  const [expandedItems, setExpandedItems] = useState([])
+  // Modules are collapsible (accordion — see toggleItem below). Start with
+  // whichever module contains the current page expanded, so nothing that was
+  // reachable before this changed suddenly needs an extra click to find.
+  const [expandedItems, setExpandedItems] = useState(() => {
+    const hash = window.location.hash.replace('#', '')
+    const matchesHash = (url) => !!url && (hash === url || hash.startsWith(`${url}/`) || hash.startsWith(`${url}?`))
+    const activeModule = (menuItems || []).find((m) => m.children?.some((c) => matchesHash(c.url)))
+    if (activeModule) return [activeModule.name]
+    return menuItems && menuItems[0] ? [menuItems[0].name] : []
+  })
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [tourRunning, setTourRunning] = useState(false)
   const [tourKey, setTourKey] = useState(0)
@@ -82,7 +93,7 @@ export function ModernSidebar({ isOpen = true, onToggle, menuItems = [], onNavig
   const tourSteps = [
     {
       target: '.modern-sidebar-nav-group:nth-of-type(1) .modern-sidebar-nav-button',
-      content: 'CCM - Dashboard, AI Drafting and more.',
+      content: 'CCM - Dashboard, AI Agent for Contract & Claim Management and more.',
       placement: 'right',
       disableBeacon: true,
     },
@@ -196,7 +207,9 @@ export function ModernSidebar({ isOpen = true, onToggle, menuItems = [], onNavig
         )}
       </div>
 
-      {/* Navigation */}
+      {/* Navigation — each top-level entry is a MODULE: an icon + label +
+          dropdown chevron, expanding to its indented SUB-MODULES (and, if a
+          sub-module has its own children, one further indented level). */}
       <nav className="modern-sidebar-nav">
         {items.map((menuItem, index) => {
           const isExpanded = expandedItems.includes(menuItem.name)
@@ -204,72 +217,87 @@ export function ModernSidebar({ isOpen = true, onToggle, menuItems = [], onNavig
           const groupActive = hasChildren && menuItem.children.some(
             (c) => isActive(c.url) || (c.children && c.children.some((cc) => isActive(cc.url)))
           )
-          const sectionIcon = sectionIcons[menuItem.name] || <AppsRounded sx={{ fontSize: 18 }} />
+          const moduleIcon = sectionIcons[menuItem.name] || fallbackIcon
 
           return (
             <div key={menuItem.name || index} className="modern-sidebar-nav-group">
-              <div className="sidebar-section-label">{menuItem.name}</div>
+              <motion.button
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.04 }}
+                onClick={() => (hasChildren ? toggleItem(menuItem.name) : handleItemClick(menuItem.url, menuItem))}
+                className={`modern-sidebar-nav-button modern-sidebar-module-button ${groupActive && !isExpanded ? 'active' : ''}`}
+                style={collapsed ? { justifyContent: 'center' } : {}}
+                title={collapsed ? menuItem.name : ''}
+              >
+                <span className="nav-icon">{moduleIcon}</span>
+                {!collapsed && <span>{menuItem.name}</span>}
+                {!collapsed && hasChildren && (
+                  <span className={`nav-chevron ${isExpanded ? 'open' : ''}`}>
+                    <ChevronDown size={14} />
+                  </span>
+                )}
+                {collapsed && <span className="sidebar-tooltip">{menuItem.name}</span>}
+              </motion.button>
 
-              {hasChildren && menuItem.children.map((subItem, subIndex) => {
-                const subExpanded = expandedItems.includes(`${menuItem.name}-${subItem.name}`)
-                const hasSubChildren = subItem.children && subItem.children.length > 0
-                const subActive = isActive(subItem.url)
-                const subIcon = getSubIcon(subItem.url)
+              {!collapsed && hasChildren && isExpanded && (
+                <AnimatePresence>
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22 }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div className="modern-sidebar-nav-submenu">
+                      {menuItem.children.map((subItem, subIndex) => {
+                        const subKey = `${menuItem.name}-${subItem.name}`
+                        const subExpanded = expandedItems.includes(subKey)
+                        const hasSubChildren = subItem.children && subItem.children.length > 0
+                        const subActive = isActive(subItem.url)
 
-                return (
-                  <div key={`${menuItem.name}-${subItem.name}`}>
-                    <motion.button
-                      initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: subIndex * 0.04 }}
-                      onClick={() => {
-                        if (hasSubChildren) toggleItem(`${menuItem.name}-${subItem.name}`)
-                        else handleItemClick(subItem.url, subItem)
-                      }}
-                      className={`modern-sidebar-nav-button ${subActive && !hasSubChildren ? 'active' : ''}`}
-                      style={collapsed ? { justifyContent: 'center' } : {}}
-                      title={collapsed ? subItem.name : ''}
-                    >
-                      <span className="nav-icon">{subIcon}</span>
-                      {!collapsed && <span>{subItem.name}</span>}
-                      {!collapsed && hasSubChildren && (
-                        <span className={`nav-chevron ${subExpanded ? 'open' : ''}`}>
-                          <ChevronDown size={14} />
-                        </span>
-                      )}
-                      {collapsed && <span className="sidebar-tooltip">{subItem.name}</span>}
-                    </motion.button>
+                        return (
+                          <div key={subKey}>
+                            <motion.button
+                              initial={{ opacity: 0, x: -8 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: subIndex * 0.03 }}
+                              onClick={() => (hasSubChildren ? toggleItem(subKey) : handleItemClick(subItem.url, subItem))}
+                              className={`modern-sidebar-nav-submenu-item ${subActive && !hasSubChildren ? 'active' : ''}`}
+                            >
+                              <span className="sub-icon">{getSubIcon(subItem.url)}</span>
+                              <span>{subItem.name}</span>
+                              {hasSubChildren && (
+                                <span className={`nav-chevron ${subExpanded ? 'open' : ''}`}>
+                                  <ChevronDown size={13} />
+                                </span>
+                              )}
+                            </motion.button>
 
-                    {!collapsed && hasSubChildren && subExpanded && (
-                      <AnimatePresence>
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.22 }}
-                          style={{ overflow: 'hidden' }}
-                        >
-                          <div className="modern-sidebar-nav-submenu">
-                            {subItem.children.map((childItem, ci) => (
-                              <motion.button
-                                key={childItem.name}
-                                initial={{ opacity: 0, x: -8 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: ci * 0.03 }}
-                                onClick={() => handleItemClick(childItem.url, childItem)}
-                                className={`modern-sidebar-nav-submenu-item ${isActive(childItem.url) ? 'active' : ''}`}
-                              >
-                                <span className="sub-icon">{getSubIcon(childItem.url)}</span>
-                                <span>{childItem.name}</span>
-                              </motion.button>
-                            ))}
+                            {hasSubChildren && subExpanded && (
+                              <div className="modern-sidebar-nav-submenu modern-sidebar-nav-submenu--nested">
+                                {subItem.children.map((childItem, ci) => (
+                                  <motion.button
+                                    key={childItem.name}
+                                    initial={{ opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: ci * 0.03 }}
+                                    onClick={() => handleItemClick(childItem.url, childItem)}
+                                    className={`modern-sidebar-nav-submenu-item ${isActive(childItem.url) ? 'active' : ''}`}
+                                  >
+                                    <span className="sub-icon">{getSubIcon(childItem.url)}</span>
+                                    <span>{childItem.name}</span>
+                                  </motion.button>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        </motion.div>
-                      </AnimatePresence>
-                    )}
-                  </div>
-                )
-              })}
+                        )
+                      })}
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              )}
             </div>
           )
         })}
@@ -319,14 +347,15 @@ export function ModernSidebar({ isOpen = true, onToggle, menuItems = [], onNavig
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsMobileOpen(false)}
-            className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+            className="modern-sidebar-mobile-overlay"
           />
         )}
       </AnimatePresence>
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — the only one visible at desktop widths, single
+          collapse toggle rendered after the logo inside sidebarContent. */}
       <aside
-        className={`hidden lg:block ${isMobileOpen ? 'mobile-open' : ''}`}
+        className={`modern-sidebar-desktop-shell ${isMobileOpen ? 'mobile-open' : ''}`}
         style={{
           position: 'fixed',
           left: 0,
@@ -340,9 +369,11 @@ export function ModernSidebar({ isOpen = true, onToggle, menuItems = [], onNavig
         {sidebarContent}
       </aside>
 
-      {/* Mobile sidebar */}
+      {/* Mobile sidebar — only reachable via the hamburger button below
+          1024px; hidden entirely at desktop widths so it can never overlap
+          with the desktop sidebar above. */}
       <aside
-        className="lg:hidden"
+        className="modern-sidebar-mobile-shell"
         style={{
           position: 'fixed',
           left: 0,

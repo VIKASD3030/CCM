@@ -15,7 +15,7 @@ stays self-contained and removable.
 _GROUPS = [
     (10, "CCM", [
         # ("Dashboard", "/master/dashboard"),
-        ("AI Drafting", "/master/ai-drafting"),
+        ("AI Agent for Contract & Claim Management", "/master/ai-drafting"),
     ]),
     (1, "Masters", [
         ("Project", "/master/project-master"),

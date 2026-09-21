@@ -148,40 +148,22 @@ async def intake_letter(
     project_id: str = None,
 ) -> InboundLetter:
     """
-    Full intake pipeline: extract text -> classify -> store.
-    Optionally scoped to a project_id. Dispatches webhook events after each stage.
+    Fast intake: extract text -> store as "new". Classification (an LLM call)
+    is deliberately NOT done here — it used to block the upload response by
+    several seconds. The caller (POST /api/letters/upload) kicks classification
+    off as a background job right after this returns; if a draft is requested
+    before that finishes, `drafting.generate_draft()` classifies inline (~1-2s)
+    instead. See `classify_letter_task` / `reclassify_letter` for that logic.
     """
-    # Load active projects for prediction
-    from backend.models.project import Project
-    from sqlalchemy import select
-    projects_result = await db.execute(
-        select(Project).where(Project.status == "active")
-    )
-    active_projects = projects_result.scalars().all()
-    projects_list = [p.to_dict() for p in active_projects] if active_projects else None
-
-    # Extract text
+    # Extract text — local parsing (pymupdf/docx), no network call, stays fast.
     raw_text = await extract_text_from_bytes(content, file_type, filename)
 
-    # Classify with project prediction
-    classification = await classify_letter(raw_text, projects=projects_list)
-
-    # Use explicit project_id, or predicted project, or legacy
-    resolved_project_id = project_id
-    if not resolved_project_id and classification.get("predicted_project"):
-        resolved_project_id = classification["predicted_project"].get("predicted_project_id")
-
-    # Create letter record
+    # Create letter record, unclassified for now.
     letter = InboundLetter(
         filename=filename,
         raw_text=raw_text,
-        intent=classification.get("intent"),
-        category=classification.get("category"),
-        urgency=classification.get("urgency"),
-        confidence_score=classification.get("confidence_score"),
-        key_entities=classification.get("key_entities"),
-        status="classified",
-        project_id=resolved_project_id,
+        status="new",
+        project_id=project_id,
         created_by=user_id,
     )
     db.add(letter)
@@ -191,32 +173,19 @@ async def intake_letter(
     audit = AuditEntry(
         entity_type="letter",
         entity_id=str(letter.id),
-        action="uploaded_and_classified",
+        action="uploaded",
         user_id=user_id,
-        details={
-            "filename": filename,
-            "category": classification.get("category"),
-            "urgency": classification.get("urgency"),
-            "confidence": classification.get("confidence_score"),
-        },
+        details={"filename": filename},
     )
     db.add(audit)
     await db.flush()
 
-    logger.info(
-        "letter.classified",
-        filename=filename,
-        category=classification.get("category"),
-        confidence=classification.get("confidence_score"),
-        user_id=str(user_id),
-    )
+    logger.info("letter.uploaded", filename=filename, user_id=str(user_id))
 
     # Dispatch webhook (fire-and-forget)
     await dispatch_event("letter.uploaded", {
         "letter_id": str(letter.id),
         "filename": filename,
-        "category": classification.get("category"),
-        "urgency": classification.get("urgency"),
         "uploaded_by": str(user_id),
     })
 

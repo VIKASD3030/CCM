@@ -76,5 +76,15 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         logger.info("db.tables_created_or_verified")
 
+        # Safety-net column adds for pre-existing tables (create_all never ALTERs).
+        # Idempotent; a matching Alembic migration can carry the same guard.
+        for ddl in (
+            "ALTER TABLE draft_responses ADD COLUMN IF NOT EXISTS letter_data JSONB",
+        ):
+            try:
+                await conn.exec_driver_sql(ddl)
+            except Exception as exc:  # noqa: BLE001 — never block startup on this
+                logger.warning("db.safety_alter_failed", ddl=ddl, error=str(exc))
+
         from backend.db_seed import seed_rbac
         await seed_rbac(conn)

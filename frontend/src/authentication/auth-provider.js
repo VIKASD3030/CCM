@@ -8,10 +8,10 @@ import env from "react-dotenv";
 export const authProvider = new MsalAuthProvider(
   {
     auth: {
-        authority: import.meta.env.VITE_AUTHORITY,
-    clientId: import.meta.env.VITE_CLIENT_ID,
-    redirectUri: import.meta.env.VITE_REDIRECT_URI,
-    postLogoutRedirectUri: import.meta.env.VITE_POST_LOGOUT_REDIRECT_URI,
+        authority: env.VITE_AUTHORITY,
+    clientId: env.VITE_CLIENT_ID,
+    redirectUri: env.VITE_REDIRECT_URI || window.location.origin,
+    postLogoutRedirectUri: env.VITE_POST_LOGOUT_REDIRECT_URI || window.location.origin,
       validateAuthority: true,
     
       // After being redirected to the "redirectUri" page, should user

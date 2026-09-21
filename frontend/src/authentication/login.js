@@ -10,6 +10,7 @@ import PrivateRoute from '../private-route';
 import ExternalDashboard from '../external-dashboard';
 import { authProvider } from './auth-provider';
 import CommonUtilityController from '../master/controller/common-utility-controller';
+import config from '../config/config';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Button from '@mui/material/Button';
@@ -169,6 +170,29 @@ class Login extends React.Component {
     this.setState({ visible: true, loading: false });
   }
 
+  // ===== TEMPORARY DEV-ONLY BYPASS — REMOVE THIS METHOD =====
+  // Logs straight in as vdwivedi2@systra.info via backend POST /api/auth/dev-login,
+  // skipping the Microsoft popup entirely. To revert: change the "Login" button's
+  // onClick back to {login} and delete this method + the dev-login backend route.
+  devLogin = async () => {
+    this.setState({ loading: true });
+    try {
+      const response = await fetch(`${config.apiUrl}/api/auth/dev-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'vdwivedi2@systra.info' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Dev login failed');
+      setSession(data.user.id, data.user.email, 'token' + data.user.id, data.access_token, true, data.user.name);
+      this.setState({ isExternalLogin: true, loading: false });
+    } catch (err) {
+      this.setState({ loading: false });
+      this.notify('error', err.message || 'Dev login failed');
+    }
+  }
+  // ===== END TEMPORARY DEV-ONLY BYPASS =====
+
   sendOTP = () => {
     let { loginValues } = this.state;
     if (!loginValues.UserName?.trim()) {
@@ -257,7 +281,8 @@ class Login extends React.Component {
                             <Stack direction="row" spacing={2}>
                               <Tooltip title="Systra Users">
                                 <span>
-                                  <Button variant="contained" size="large" onClick={login} disabled={isInProgress || !loginEnabled}>
+                                  {/* TEMPORARY: onClick={this.devLogin} bypasses Microsoft sign-in. Revert to onClick={login} to restore real Azure AD login. */}
+                                  <Button variant="contained" size="large" onClick={this.devLogin} disabled={isInProgress || !loginEnabled}>
                                     Login
                                   </Button>
                                 </span>

@@ -1,0 +1,236 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="module" src="/master/src/_pdf_repro_entry.js"></script>
+<style>
+body{margin:0;background:#e9ecef;padding:36px;font-family:sans-serif}
+/* ─────────────────────────────────────────────────────────────────────────────
+   SYSTRA MVA Consulting — official correspondence letter.
+   Layout matches the reference letter "Letter to TGTS_MPR_Nov '25_007":
+   top-right wordmark, ref/date row, bold recipient, aligned Subject/Project/Ref
+   grid, left-aligned body, signature block, and a bottom footer carrying the
+   red brand device + company address block.
+
+   Nothing here is produced by the LLM — only the text inside .systra-body,
+   .systra-recipient and .systra-meta-value is dynamic.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.systra-letter {
+  --systra-brand-red: #d22328;
+  --systra-ink: #1a1a1a;
+  --systra-ink-soft: #333;
+  --systra-pad-x: 90px;          /* ≈ left margin of the reference letter */
+  --systra-pad-r: 66px;
+  --systra-pad-top: 48px;
+  --systra-pad-bottom: 40px;
+
+  box-sizing: border-box;
+  width: 794px;                  /* A4 @ 96dpi */
+  min-height: 1123px;            /* A4 @ 96dpi — footer pins to the bottom */
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--systra-pad-top) var(--systra-pad-r) var(--systra-pad-bottom) var(--systra-pad-x);
+  background: #fff;
+  color: var(--systra-ink);
+  font-family: "Calibri", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid #e5e7eb;    /* screen only — stripped for print / PDF */
+}
+.systra-letter *,
+.systra-letter *::before,
+.systra-letter *::after { box-sizing: border-box; }
+
+.systra-content { flex: 0 1 auto; }
+
+/* ── Top-right logo ─────────────────────────────────────────────────────── */
+.systra-logo-top {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 46px;
+}
+.systra-logo-top svg,
+.systra-logo-top img {
+  display: block;
+  width: 168px;                 /* ≈ reference logo width */
+  height: auto;                 /* preserve aspect ratio, never stretch */
+}
+
+/* ── Reference / Date row ──────────────────────────────────────────────── */
+.systra-refdate {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+.systra-refdate strong { font-weight: 700; }
+
+/* ── Recipient (bold, as in the reference) ─────────────────────────────── */
+.systra-recipient {
+  font-weight: 700;
+  margin-bottom: 26px;
+}
+.systra-recipient > div { margin: 1px 0; }
+.systra-recipient .systra-attn { margin-bottom: 6px; }
+
+/* ── Subject / Project / Ref — aligned label column + wrapping value ───── */
+.systra-metadata {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  column-gap: 10px;
+  row-gap: 6px;
+  margin: 0 0 26px 6px;
+}
+.systra-meta-label { font-weight: 700; }
+.systra-meta-value { word-break: break-word; }
+
+/* ── Salutation + body ────────────────────────────────────────────────── */
+.systra-salutation { font-weight: 700; margin-bottom: 16px; }
+.systra-body p {
+  margin: 0 0 14px;
+  text-align: left;             /* reference is ragged-right, NOT justified */
+}
+.systra-body .systra-closing { margin-top: 4px; }
+.systra-body .systra-closing div { margin: 1px 0; }
+
+/* ── Sign-off + signature ─────────────────────────────────────────────── */
+.systra-signoff { margin-top: 22px; }
+.systra-signoff > div { margin: 1px 0; }
+.systra-signoff > .systra-sign-space { height: 72px; }   /* room for a wet signature */
+.systra-signoff > .systra-signatory { font-weight: 700; }
+.systra-signoff > .systra-for-company { font-weight: 700; margin-top: 20px; }
+
+/* ── Enclosure ───────────────────────────────────────────────────────── */
+.systra-enclosure { margin-top: 22px; }
+.systra-enclosure ol { margin: 3px 0 0; padding-left: 34px; }
+
+/* ── Footer : red brand device + company info ─────────────────────────── */
+.systra-footer {
+  margin-top: auto;             /* pin to the bottom of the A4 page */
+  padding-top: 26px;
+}
+.systra-brand-mark {
+  margin-left: calc(-1 * var(--systra-pad-x));  /* bleed off the left edge */
+  margin-bottom: 10px;
+}
+.systra-brand-mark svg,
+.systra-brand-mark img {
+  display: block;
+  width: 150px;
+  height: auto;
+}
+.systra-company-info {
+  color: #4a4a4a;
+  font-size: 10px;
+  line-height: 1.38;
+}
+.systra-company-name { font-weight: 700; color: #333; margin-bottom: 1px; }
+.systra-company-info .systra-office strong { font-weight: 700; color: #333; }
+.systra-company-info .systra-contact { word-break: break-word; }
+
+/* ── Responsive preview (screen only) ─────────────────────────────────── */
+@media (max-width: 860px) {
+  .systra-letter {
+    width: 100%;
+    --systra-pad-x: 34px;
+    --systra-pad-r: 28px;
+    --systra-pad-top: 32px;
+    font-size: 13px;
+  }
+  .systra-logo-top svg,
+  .systra-logo-top img { width: 140px; }
+  .systra-refdate { flex-wrap: wrap; gap: 4px 24px; }
+}
+
+/* ── Print / PDF ─────────────────────────────────────────────────────── */
+@media print {
+  .systra-letter {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    font-size: 11pt;
+  }
+  .systra-brand-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .systra-body p { orphans: 3; widows: 3; }
+  .systra-footer { page-break-inside: avoid; }
+}
+
+#log { white-space:pre-wrap; background:#111; color:#0f0; padding:12px; margin-top:16px; font-size:12px; max-width:794px; }
+</style></head><body>
+<button id="dl" style="padding:10px 16px;font-size:14px;margin-bottom:16px;">Download PDF</button>
+<div id="log"></div>
+<div class="systra-letter" id="letter"><div class="systra-content">
+  <div class="systra-logo-top"><svg viewBox="0 0 424.6 80.7" xmlns="http://www.w3.org/2000/svg"><path fill="#d22328" d="M183.6 3.3V1.7c0-.3-.2-.5-.5-.5h-22c-.6 0-.8.1-1.2.5-2.8 3-4.8 6.9-4.8 12.1 0 4.7 1.3 8.9 4.9 12.9 8.3 9.3 26.3 14.4 33.3 20.2 2.6 2.2 4.2 4.6 4.2 7.4 0 6.3-4.4 11-17.8 11-7.8 0-14.4-1.5-23-3.2-.4-.1-.4.1-.4.3v13.3c0 .4.1.5.4.6 7.6 2.6 16.8 4.3 25.3 4.3 20.8 0 34.8-10.9 34.8-27.1 0-7.4-3-13.1-8.3-17.9-7.7-7-20.6-11.5-28-16-2.5-1.5-5.7-4-5.7-8.2.1-3.4 2.2-6.8 8.8-8.1zm95 76c-1.5.3-6.7 1.3-13.5 1.3-20.2 0-30.2-9.1-30.2-29.3V16.4h-22.7c-.3 0-.5-.1-.6-.5l-2.5-14.3c0-.3.1-.5.4-.5h69.1c.3 0 .5.2.5.5V16c0 .3-.2.5-.5.5h-24.8v35.3c0 10 5 14.1 16.2 14.1 4.6 0 7.5-.3 8.6-.5.3 0 .5.1.5.4v13c0 .3-.1.5-.5.5zm65.2-78.1C342.1.9 336.2 0 328.6 0c-18.7 0-34.1 7.7-34.1 29.8V79c0 .3.2.5.5.5h18c.3 0 .5-.2.5-.5V30.5c0-9.7 5.3-15.5 19.6-15.5 4.3 0 9 .4 10.8.6.3 0 .5-.1.5-.4V1.8c-.2-.3-.3-.5-.6-.6zm72.3 29.7C412.5 10.5 402.8 0 384.1 0s-28.4 10.5-32 30.9c0 0-8.4 47.8-8.5 48.1-.1.4.2.5.4.5h17.9c.4 0 .5-.1.5-.5.1-.3 3.2-18.4 3.2-18.4h27c.3 0 .5-.1.6-.5l2.5-14.3c0-.3-.1-.5-.4-.5h-27l2.6-14.5c1.7-9.6 4.2-15.8 13.2-15.8s11.5 6.2 13.2 15.8c0 0 8.4 47.8 8.5 48.1.1.3.2.5.5.5h17.9c.2 0 .5-.1.4-.5 0-.3-8.5-48-8.5-48zM116.7 79.5c.3 0 .5-.2.5-.5V57.1c14.6-2.8 21.6-12.9 24.6-30l4.4-25.5c0-.3-.1-.5-.4-.5h-17.5c-.4 0-.5.1-.5.5l-4.5 25.5c-1.7 9.6-6.2 16-15.2 16s-13.5-6.4-15.2-16L88.4 1.6c-.1-.3-.2-.5-.6-.5H70.2c-.3 0-.4.2-.4.5l4.4 25.5c3 17.1 9.9 27.2 24.6 30V79c0 .3.2.5.5.5h17.4zM37.2 38.8c-12.4-5.9-17.5-9-17.5-14.3 0-6.1 4.1-9.4 15.7-9.4 6.2 0 14.5 1 21.4 2.5.3.1.4 0 .4-.3V4.1c0-.3-.1-.5-.4-.6C48.9 1.3 42.2 0 33.1 0 12 0 0 10.3 0 24.7 0 31 2.1 36.1 6.4 40.6 14.8 49.3 33.1 55 39 60.7c2.7 2.6 3.5 4.9 3.5 7.3 0 6-4.5 8.6-9.8 9.6-.3.1-.8.1-1.2.2V79c0 .3.2.5.5.5h24.3c.6 0 .8-.1 1.2-.5 2.8-3.1 4.6-8.6 4.6-12.7 0-9.9-4.9-18-24.9-27.5z"/></svg></div>
+  <div class="systra-refdate"><div class="systra-ref"><strong>Our Ref No.:</strong> SMCIPL/CPMS/GoTS/26/410</div><div class="systra-date"><strong>Date:</strong> 11th September 2026</div></div>
+  <div class="systra-recipient"><div>To</div><div class="systra-attn">Kind Attn: Ms. Rebecca Nawrocki</div><div>Senior Project Manager</div><div>Northgate Construction Co.,</div><div>915 Ironworks Road</div><div>Cleveland, OH 44113, USA</div></div>
+  <div class="systra-metadata"><div class="systra-meta-label">Subject:</div><div class="systra-meta-value">Response to Notice of Delay and Request for Extension of Time</div><div class="systra-meta-label">Project:</div><div class="systra-meta-value">Vantage Midtown Office Development</div><div class="systra-meta-label">Ref:</div><div class="systra-meta-value">Your letter dated 24th June 2026</div></div>
+  <div class="systra-salutation">Respected Madam,</div>
+  <div class="systra-body"><p>I hope this letter finds you in the best of health and spirits.</p><p>Para one.</p><p>Para two with more detail about the matter at hand and next steps.</p><p>Para three closing remarks.</p><div class="systra-closing"><div>This letter is submitted for your kind perusal.</div><div>We sincerely appreciate your continued support and cooperation.</div></div></div>
+  <div class="systra-signoff"><div>With highest regards,</div><div>Sincerely,</div><div class="systra-sign-space"></div>
+   <div class="systra-signatory"><div class="systra-signatory-name">Laurent Petit</div><div>Vice President &amp; Head</div><div>CTR</div></div>
+   <div class="systra-for-company">For, SYSTRA MVA Consulting India Pvt Ltd</div></div>
+  <div class="systra-enclosure"><div>Encl: Nil</div></div>
+ </div>
+ <footer class="systra-footer"><div class="systra-brand-mark"><svg viewBox="0 0 150 40" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="14.5" width="96" height="11" rx="5.5" fill="#d22328"/><circle cx="66" cy="20" r="17.5" fill="#d22328"/><circle cx="66" cy="20" r="7.6" fill="#fff"/></svg></div>
+  <div class="systra-company-info"><div class="systra-company-name">SYSTRA MVA CONSULTING (INDIA) PRIVATE LIMITED</div><div class="systra-office"><strong>Project office</strong> | Sanali Spazio • 10th Floor • Plot no.19 • Software units layout • Madhapur • Hyderabad • India • 500081</div><div class="systra-office"><strong>Registered office</strong> | Eros Corporate Tower • 15th Floor • Nehru Place • New Delhi • India • 110 019</div><div class="systra-office"><strong>Corporate office</strong> | L &amp; T Business Park • Tower 2 • 4th floor • North &amp; South Wing • 12/4, Mathura Road, Faridabad • India • 121 003</div><div class="systra-contact">Tel: (+91) 129 668 5600 | Web: www.systra.in | Mail: contact.india@systra.com | CIN: U74210DL2005PTC140217</div></div>
+ </footer></div>
+
+<script>
+function log(msg) { document.getElementById('log').textContent += msg; console.log(msg); }
+
+function waitForPdfTest() {
+  return new Promise((resolve) => {
+    if (window.__pdfTest) return resolve(window.__pdfTest);
+    window.addEventListener('pdftest-ready', () => resolve(window.__pdfTest), { once: true });
+  });
+}
+
+document.getElementById('dl').addEventListener('click', async () => {
+  const el = document.getElementById('letter');
+  log('waiting for module import...');
+  const { jsPDF, html2canvas } = await waitForPdfTest();
+  log('modules ready: jsPDF=' + typeof jsPDF + ' html2canvas=' + typeof html2canvas);
+  const prevBorder = el.style.border;
+  try {
+    el.style.border = 'none';
+    log('el.scrollWidth=' + el.scrollWidth + ' el.scrollHeight=' + el.scrollHeight + ' offsetWidth=' + el.offsetWidth + ' offsetHeight=' + el.offsetHeight);
+    const canvas = await html2canvas(el, {
+      scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
+      windowWidth: el.scrollWidth, windowHeight: el.scrollHeight,
+    });
+    el.style.border = prevBorder;
+    log('canvas.width=' + canvas.width + ' canvas.height=' + canvas.height);
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    log('pageW=' + pageW + ' pageH=' + pageH);
+    const img = canvas.toDataURL('image/jpeg', 0.95);
+    const fullH = (canvas.height * pageW) / canvas.width;
+    log('fullH=' + fullH);
+
+    if (fullH <= pageH * 1.02) {
+      pdf.addImage(img, 'JPEG', 0, 0, pageW, Math.min(fullH, pageH));
+    } else {
+      let heightLeft = fullH;
+      let position = 0;
+      pdf.addImage(img, 'JPEG', 0, position, pageW, fullH);
+      heightLeft -= pageH;
+      while (heightLeft > 0) {
+        position -= pageH;
+        pdf.addPage();
+        pdf.addImage(img, 'JPEG', 0, position, pageW, fullH);
+        heightLeft -= pageH;
+      }
+    }
+    pdf.save('test.pdf');
+    log('SUCCESS');
+  } catch (e) {
+    el.style.border = prevBorder;
+    log('ERROR: ' + e.message);
+    log(e.stack);
+  }
+});
+</script>
+</body></html>

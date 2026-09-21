@@ -32,6 +32,15 @@ async def _update_job_status(
     error_message: str = None,
 ):
     """Helper to update job status and send pg_notify."""
+    # A failing task leaves its transaction aborted; roll back so we can still
+    # persist the "failed" status instead of the job hanging non-terminal
+    # (which the frontend surfaces as "Timed out waiting for draft").
+    if status == "failed":
+        try:
+            await session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
     stmt = select(Job).where(Job.id == job_id)
     result_obj = await session.execute(stmt)
     job = result_obj.scalar_one_or_none()
@@ -75,9 +84,19 @@ async def classify_letter_task(ctx: Dict[str, Any], letter_id: str) -> Dict[str,
             if not letter:
                 raise ValueError(f"Letter {letter_id} not found")
 
+            # Predict a project only if the upload didn't already specify one.
+            projects_list = None
+            if not letter.project_id:
+                from backend.models.project import Project
+                projects_result = await session.execute(
+                    select(Project).where(Project.status == "active")
+                )
+                active_projects = projects_result.scalars().all()
+                projects_list = [p.to_dict() for p in active_projects] if active_projects else None
+
             # Classify the letter text
             from backend.services.letter_intake import classify_letter
-            classification = await classify_letter(letter.raw_text)
+            classification = await classify_letter(letter.raw_text, projects=projects_list)
 
             # Update letter with classification results
             letter.category = classification.get("category")
@@ -86,6 +105,8 @@ async def classify_letter_task(ctx: Dict[str, Any], letter_id: str) -> Dict[str,
             letter.confidence_score = classification.get("confidence_score")
             letter.key_entities = classification.get("key_entities")
             letter.status = "classified"
+            if not letter.project_id and classification.get("predicted_project"):
+                letter.project_id = classification["predicted_project"].get("predicted_project_id")
             await session.flush()
 
             await _update_job_status(

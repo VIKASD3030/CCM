@@ -245,6 +245,32 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
+# Whether this database has a usable pgvector `vector` type / `<=>` operator.
+# Probed lazily on first search; None = unknown, True/False = probed result.
+_pgvector_available: bool | None = None
+
+
+def _build_chunk_filters(
+    category: str = None,
+    project_id: str = None,
+    user_id: uuid.UUID = None,
+    user_role: str = None,
+) -> tuple[list[str], dict]:
+    """Shared WHERE clauses + params for the two search implementations."""
+    where_clauses = ["kd.status = 'indexed'"]
+    params: dict = {}
+    if project_id:
+        where_clauses.append("kd.project_id = :project_id")
+        params["project_id"] = str(project_id)
+    if user_role != "admin" and user_id is not None:
+        where_clauses.append("kd.uploaded_by = :user_id")
+        params["user_id"] = str(user_id)
+    if category:
+        where_clauses.append("kd.category = :category")
+        params["category"] = category
+    return where_clauses, params
+
+
 async def search_similar_chunks(
     db: AsyncSession,
     query_text: str,
@@ -255,52 +281,80 @@ async def search_similar_chunks(
     user_role: str = None,
 ) -> list[dict]:
     """
-    Semantic search using pgvector native <=> (cosine distance) operator.
-    Scoped to project_id if provided — no cross-project retrieval by default.
+    Semantic search over indexed document chunks.
+
+    Uses pgvector's native `<=>` cosine-distance operator when the database has
+    the extension; otherwise falls back to fetching candidate chunks and scoring
+    them with cosine similarity in Python. Scoped to project_id if provided — no
+    cross-project retrieval by default.
     """
+    global _pgvector_available
+
     query_embeddings = await generate_embeddings([query_text])
     if not query_embeddings or query_embeddings[0] is None:
         return []
-
     query_vec = query_embeddings[0]
-    query_vec_literal = "[" + ",".join(str(v) for v in query_vec) + "]"
 
-    where_clauses = ["kd.status = 'indexed'"]
-    params: dict = {"query_embedding": query_vec_literal, "top_k": top_k}
+    if _pgvector_available is not False:
+        try:
+            # Run inside a SAVEPOINT so a "type vector does not exist" failure
+            # rolls back only this nested block, leaving the caller's outer
+            # transaction (and its ORM identity map) intact.
+            async with db.begin_nested():
+                results = await _search_pgvector(
+                    db, query_vec, top_k, category, project_id, user_id, user_role
+                )
+            _pgvector_available = True
+            return results
+        except Exception as e:  # noqa: BLE001 — any DB error here => no usable pgvector
+            if _pgvector_available is None:
+                logger.warning(
+                    "kb.pgvector_unavailable_fallback_python",
+                    error=str(e).splitlines()[0][:200],
+                )
+            _pgvector_available = False
 
-    if project_id:
-        where_clauses.append("kd.project_id = :project_id")
-        params["project_id"] = str(project_id)
+    return await _search_python_cosine(
+        db, query_vec, top_k, category, project_id, user_id, user_role
+    )
 
-    if user_role != "admin" and user_id is not None:
-        where_clauses.append("kd.uploaded_by = :user_id")
-        params["user_id"] = str(user_id)
 
-    if category:
-        where_clauses.append("kd.category = :category")
-        params["category"] = category
-
+async def _search_pgvector(
+    db: AsyncSession,
+    query_vec: list[float],
+    top_k: int,
+    category: str,
+    project_id: str,
+    user_id: uuid.UUID,
+    user_role: str,
+) -> list[dict]:
+    """Native pgvector search path."""
+    where_clauses, params = _build_chunk_filters(category, project_id, user_id, user_role)
+    params["query_embedding"] = "[" + ",".join(str(v) for v in query_vec) + "]"
+    params["top_k"] = top_k
     where_sql = " AND ".join(where_clauses)
 
+    # NOTE: CAST(:param AS vector), not :param::vector — SQLAlchemy's text()
+    # bind-param parser ignores a :name immediately followed by "::" (a Postgres
+    # cast), leaving the literal ":query_embedding" to reach asyncpg and blow up
+    # with `syntax error at or near ":"`.
     sql = text(f"""
-        SELECT 
+        SELECT
             dc.id AS chunk_id,
             dc.document_id,
             dc.chunk_text,
             dc.chunk_index,
-            (dc.embedding <=> :query_embedding::vector) AS distance,
+            (dc.embedding <=> CAST(:query_embedding AS vector)) AS distance,
             dc.metadata
         FROM document_chunks dc
         JOIN knowledge_documents kd ON dc.document_id = kd.id
         WHERE {where_sql}
             AND dc.embedding IS NOT NULL
-        ORDER BY dc.embedding <=> :query_embedding::vector
+        ORDER BY dc.embedding <=> CAST(:query_embedding AS vector)
         LIMIT :top_k
     """)
 
     result = await db.execute(sql, params)
-    rows = result.fetchall()
-
     return [
         {
             "chunk_id": str(row.chunk_id),
@@ -310,7 +364,61 @@ async def search_similar_chunks(
             "similarity": round(1.0 - float(row.distance), 4),
             "metadata": row.metadata if row.metadata else {},
         }
-        for row in rows
+        for row in result.fetchall()
+    ]
+
+
+async def _search_python_cosine(
+    db: AsyncSession,
+    query_vec: list[float],
+    top_k: int,
+    category: str,
+    project_id: str,
+    user_id: uuid.UUID,
+    user_role: str,
+) -> list[dict]:
+    """Fallback: pull candidate chunks and rank by cosine similarity in Python.
+
+    Used when the database has no pgvector extension. `embedding` is a
+    ``double precision[]`` column, returned by asyncpg as a plain list.
+    """
+    where_clauses, params = _build_chunk_filters(category, project_id, user_id, user_role)
+    where_sql = " AND ".join(where_clauses)
+
+    sql = text(f"""
+        SELECT
+            dc.id AS chunk_id,
+            dc.document_id,
+            dc.chunk_text,
+            dc.chunk_index,
+            dc.embedding AS embedding,
+            dc.metadata
+        FROM document_chunks dc
+        JOIN knowledge_documents kd ON dc.document_id = kd.id
+        WHERE {where_sql}
+            AND dc.embedding IS NOT NULL
+    """)
+
+    rows = (await db.execute(sql, params)).fetchall()
+
+    scored = []
+    for row in rows:
+        emb = row.embedding
+        if not emb:
+            continue
+        scored.append((cosine_similarity(query_vec, list(emb)), row))
+    scored.sort(key=lambda t: t[0], reverse=True)
+
+    return [
+        {
+            "chunk_id": str(row.chunk_id),
+            "document_id": str(row.document_id),
+            "chunk_text": row.chunk_text,
+            "chunk_index": row.chunk_index,
+            "similarity": round(float(sim), 4),
+            "metadata": row.metadata if row.metadata else {},
+        }
+        for sim, row in scored[:top_k]
     ]
 
 

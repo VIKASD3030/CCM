@@ -55,7 +55,7 @@ class ModernHeader extends Component {
     let title = 'CCM'
 
     if (hash.includes('/master/dashboard')) title = 'Dashboard'
-    else if (hash.includes('/master/ai-drafting')) title = 'AI Drafting'
+    else if (hash.includes('/master/ai-drafting')) title = 'AI Agent for Contract & Claim Management'
     else if (hash.includes('/master/project-master')) title = 'Projects'
     else if (hash.includes('/master/department-master')) title = 'Departments'
     else if (hash.includes('/master/designation-master')) title = 'Designations'

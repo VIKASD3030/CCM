@@ -3,101 +3,28 @@
 > vite
 
 
-  [32m[1mVITE[22m v7.3.6[39m  [2mready in [0m[1m535[22m[2m[0m ms[22m
+  [32m[1mVITE[22m v7.3.6[39m  [2mready in [0m[1m2487[22m[2m[0m ms[22m
 
   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5000[22m/master/[39m
-  [32m➜[39m  [1mNetwork[22m: [36mhttp://10.111.140.30:[1m5000[22m/master/[39m
-  [32m➜[39m  [1mNetwork[22m: [36mhttp://10.111.20.123:[1m5000[22m/master/[39m
-[2m6:07:10 PM[22m [36m[1m[vite][22m[39m [32m.env changed, restarting server...[39m
-[2m6:07:10 PM[22m [36m[1m[vite][22m[39m server restarted.
-[2m6:07:23 PM[22m [36m[1m[vite][22m[39m [32mvite.config.js changed, restarting server...[39m
-[2m6:07:23 PM[22m [36m[1m[vite][22m[39m server restarted.
-[2m7:05:16 PM[22m [36m[1m[vite][22m[39m [32mvite.config.js changed, restarting server...[39m
-[2m7:05:16 PM[22m [36m[1m[vite][22m[39m server restarted.
-[2m1:53:52 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:54:08 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:54:25 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:54:52 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:55:05 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:55:15 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:55:35 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:55:49 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:56:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:56:18 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:56:29 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:56:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:57:02 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:57:13 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:57:26 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:57:54 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:58:06 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:58:20 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m1:58:28 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m2:01:23 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
-[2m2:01:23 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/_nav.js[22m
-[2m2:03:36 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/_nav.js[22m
-[2m2:04:15 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/external-layout.js[22m
-[2m6:53:18 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/_nav.js[22m
-[2m6:53:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/_nav.js[22m
-[2m6:58:36 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/external-layout.js[22m
-[2m10:01:54 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/AppDataGrid.jsx[22m
-[2m10:09:39 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/AppDataGrid.jsx[22m
-[2m10:39:53 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/theme/palette.js[22m
-[2m10:40:13 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/theme/typography.js[22m
-[2m10:40:22 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/theme/shape.js[22m
-[2m10:40:59 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/theme/components.js[22m
-[2m10:41:50 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/containers/default-layout/modern-sidebar.css[22m
-[2m10:42:30 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:43:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-header.js[22m
-[2m10:43:24 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/AppDataGrid.jsx[22m
-[2m10:43:39 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/DataCard.jsx[22m
-[2m10:43:57 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/PageContainer.jsx[22m
-[2m10:44:13 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/PageHeader.jsx[22m
-[2m10:44:36 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/StatCard.jsx[22m
-[2m10:45:56 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/EmptyState.jsx[22m
-[2m10:46:01 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/FormDialog.jsx[22m
-[2m10:46:07 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/StatusBadge.jsx[22m
-[2m10:46:15 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/ConfirmDialog.jsx[22m
-[2m10:47:09 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/external-layout.js[22m
-[2m10:47:30 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/containers/default-layout/modern-sidebar.css[22m
-[2m10:47:49 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/containers/default-layout/modern-sidebar.css[22m
-[2m10:48:08 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/containers/default-layout/modern-sidebar.css[22m
-[2m10:48:26 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/containers/default-layout/modern-sidebar.css[22m
-[2m10:48:35 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/containers/default-layout/modern-sidebar.css[22m
-[2m10:49:45 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:49:54 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:50:27 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:50:39 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:50:47 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:51:33 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:51:40 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m10:51:48 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32m✨ new dependencies optimized: [33m@mui/material/Breadcrumbs, @mui/material/Link, @mui/icons-material/WarningAmberRounded[32m[39m
-[2m10:51:48 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32m✨ optimized dependencies changed. reloading[39m
-[2m10:55:25 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/ccm/views/dashboard.js[22m
-[2m10:58:30 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/ccm/views/dashboard.js[22m
-[2m11:00:34 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/ccm/views/dashboard.js[22m
-[2m11:01:58 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/authentication/login.css[22m
-[2m11:21:51 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
-[2m11:39:57 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/StatCard.jsx[22m
-[2m11:41:11 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/AppDataGrid.jsx[22m
-[2m11:41:41 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/components/ui/index.js[22m
-[2m11:41:53 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32m✨ new dependencies optimized: [33m@mui/icons-material/NavigateNext, @mui/material/Select, @mui/material/Menu, @mui/material/ListItemIcon, @mui/material/ListItemText, @mui/material/Badge[32m[39m
-[2m11:41:53 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32m✨ optimized dependencies changed. reloading[39m
-[2m11:43:52 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/project-master.js[22m
-[2m11:44:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/master/views/project-master.css[22m
-[2m12:09:41 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/project-master.js[22m
-[2m12:19:28 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/project-master.js[22m
-[2m12:19:44 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/project-master.js[22m
-[2m12:19:55 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/project-master.js[22m
-[2m12:20:06 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/project-master.js[22m
-[2m12:20:19 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/project-master.js[22m
-[2m12:38:18 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/designation-master.js[22m
-[2m12:38:53 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/module-group-master.js[22m
-[2m12:39:03 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/role-master.js[22m
-[2m12:39:08 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/department-master.js[22m
-[2m12:39:34 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/role-right-master.js[22m
-[2m12:39:51 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/module-master.js[22m
-[2m12:40:19 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/user-master.js[22m
-[2m12:41:19 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/user-role-master.js[22m
-[2m12:51:23 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/user-role-master.js[22m
-[2m12:51:24 AM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/master/views/user-master.js[22m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.29.246:[1m5000[22m/master/[39m
+[2m7:54:13 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/authentication/login.css[22m
+[2m7:54:13 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/login.js[22m
+[2m8:02:04 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/auth-provider.js[22m
+[2m8:04:08 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/app.js[22m
+[2m8:12:08 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/login.js[22m
+[2m8:12:15 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/login.js[22m
+[2m8:12:21 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/login.js[22m
+[2m11:50:42 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/_nav.js[22m
+[2m11:50:46 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/routes.js[22m
+[2m11:50:51 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-header.js[22m
+[2m11:50:55 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/ui/Breadcrumbs.jsx[22m
+[2m11:50:58 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/containers/default-layout/modern-sidebar.js[22m
+[2m11:51:55 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/app.js[22m
+[2m11:52:00 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/app.js[22m
+[2m11:58:28 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/app.js[22m
+[2m11:58:37 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/app.js[22m
+[2m11:58:44 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/landing-page.js[22m
+[2m11:58:48 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/landing-page.js[22m
+[2m11:58:56 am[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/authentication/landing-page.css[22m
+[2m12:14:27 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/authentication/landing-page.js[22m
+[2m12:14:38 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/authentication/landing-page.css[22m

@@ -57,7 +57,7 @@ const routes = [
 
 
   { path: '/master/dashboard', name: 'Dashboard', component: CcmDashboard },
-  { path: '/master/ai-drafting', name: 'AI Drafting', component: CcmAiDrafting },
+  { path: '/master/ai-drafting', name: 'AI Agent for Contract & Claim Management', component: CcmAiDrafting },
   { path: '/master/project-master', name: 'Project', component: Project },
   { path: '/master/project-master-details', name: 'Project Details', component: ProjectDetails },
   // { path: '/master/variation-order-master', name: 'Variation Order', component: VariationOrder },

@@ -17,13 +17,17 @@ import {
   Description as DocIcon, Folder as FolderIcon, SmartToy as RobotIcon, Person as PersonIcon,
   MenuBook as BookIcon, Upload as UploadIcon, ExpandMore as ExpandIcon,
   ChevronLeft as CollapseIcon, ChevronRight as ExpandSidebarIcon,
-  Menu as MenuIcon,
+  Menu as MenuIcon, PictureAsPdf as PdfIcon,
 } from '@mui/icons-material';
 import CCM from '../ccm-api';
 import { AppBreadcrumbs } from '../../components/ui';
+import SystraLetter from '../components/SystraLetter';
 import '../ccm.css';
 
-const DRAFTABLE = ['classified', 'drafted', 'pending_review', 'approved'];
+// 'new' included: upload now returns before classification finishes (it runs
+// in the background), so a just-uploaded letter must stay pickable right
+// away — generate_draft() classifies inline if it's still unclassified.
+const DRAFTABLE = ['new', 'classified', 'drafted', 'pending_review', 'approved'];
 
 const LETTER_TYPES = [
   { value: 'eot', label: 'Extension of Time (EOT)' },
@@ -97,6 +101,12 @@ const LETTER_TYPE_PROMPTS = {
 class AiDrafting extends React.Component {
   constructor(props) {
     super(props);
+    // DOM nodes of rendered SYSTRA letters, keyed by message id — used for
+    // PDF export and printing.
+    this.letterRefs = {};
+    // DOM nodes of each message row, keyed by message id — used to scroll a
+    // freshly generated draft into view starting from its top.
+    this.messageRefs = {};
     this.state = {
       // session/context
       currentSessionId: null,
@@ -193,6 +203,21 @@ class AiDrafting extends React.Component {
     }, 0);
   }
 
+  // Scroll so the START of the most recent message is at the top of the
+  // thread, instead of jumping to the bottom — used after a draft is
+  // generated so the user reads the new letter from the top and scrolls
+  // down themselves, rather than landing on its signature/footer.
+  scrollToLatestMessageTop = () => {
+    setTimeout(() => {
+      const container = this.threadRef.current;
+      const { messages } = this.state;
+      if (!container || !messages.length) return;
+      const last = messages[messages.length - 1];
+      const el = this.messageRefs[last.id || (messages.length - 1)];
+      container.scrollTop = el ? Math.max(0, el.offsetTop - 12) : container.scrollHeight;
+    }, 0);
+  };
+
   // ── Session lifecycle ─────────────────────────────────────
   startNewDraft = () => {
     this.setState({
@@ -265,11 +290,13 @@ class AiDrafting extends React.Component {
 
   onPickerFile = async (file) => {
     if (!file) return;
-    this.setState({ uploadStatus: { type: 'loading', msg: `Uploading and classifying "${file.name}"…` } });
+    this.setState({ uploadStatus: { type: 'loading', msg: `Uploading "${file.name}"…` } });
     try {
       const projectId = this.state.pickerUploadProjectId || null;
       const result = await CCM.letters.upload(file, projectId);
-      this.setState({ uploadStatus: { type: 'success', msg: `Uploaded! Classified as ${result.letter?.category || 'general'}` } });
+      // Classification now runs in the background (upload no longer waits on
+      // it), so result.letter.category isn't populated yet — don't claim it is.
+      this.setState({ uploadStatus: { type: 'success', msg: 'Uploaded! Classifying in the background…' } });
       this.toast('Letter uploaded successfully!', 'success');
       await this.loadLetters();
       if (result.letter?.id) {
@@ -345,7 +372,7 @@ class AiDrafting extends React.Component {
         const session = sessionRes.session;
         let lastSourceDocs = this.state.lastSourceDocs;
         for (const m of (session.messages || [])) { if (m.role === 'assistant' && m.context_documents?.length) lastSourceDocs = m.context_documents; }
-        this.setState({ messages: session.messages || [], lastSourceDocs }, this.scrollThread);
+        this.setState({ messages: session.messages || [], lastSourceDocs }, this.scrollToLatestMessageTop);
         this.toast('Draft generated!', 'success');
         await this.loadSessions();
       }
@@ -388,6 +415,59 @@ class AiDrafting extends React.Component {
     navigator.clipboard.writeText(content || '')
       .then(() => this.toast('Copied to clipboard', 'success'))
       .catch(() => this.toast('Copy failed', 'error'));
+  };
+
+  _letterFileName = (data) => {
+    const ref = (data?.reference_number || 'SYSTRA-Letter').replace(/[^A-Za-z0-9]+/g, '-');
+    return `${ref}.pdf`;
+  };
+
+  // Rasterise the rendered SYSTRA letter node into a clean A4 PDF.
+  // Reuses the app's existing html2canvas + jsPDF stack — no new dependency,
+  // no browser print dialog, so NO browser headers/footers, page numbers or
+  // "about:blank" end up in the file. Stays one page when the content fits.
+  downloadLetterPdf = async (key, data) => {
+    const el = this.letterRefs[key];
+    if (!el) { this.toast('Letter not ready yet', 'warning'); return; }
+    const prevBorder = el.style.border;
+    try {
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+      ]);
+      el.style.border = 'none';   // drop the on-screen page edge for the capture
+      const canvas = await html2canvas(el, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
+        windowWidth: el.scrollWidth, windowHeight: el.scrollHeight,
+      });
+      el.style.border = prevBorder;
+
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();   // 595.28
+      const pageH = pdf.internal.pageSize.getHeight();  // 841.89
+      const img = canvas.toDataURL('image/jpeg', 0.95);
+      const fullH = (canvas.height * pageW) / canvas.width;
+
+      if (fullH <= pageH * 1.02) {
+        // Fits on one page — keep it one page.
+        pdf.addImage(img, 'JPEG', 0, 0, pageW, Math.min(fullH, pageH));
+      } else {
+        let heightLeft = fullH;
+        let position = 0;
+        pdf.addImage(img, 'JPEG', 0, position, pageW, fullH);
+        heightLeft -= pageH;
+        while (heightLeft > 0) {
+          position -= pageH;
+          pdf.addPage();
+          pdf.addImage(img, 'JPEG', 0, position, pageW, fullH);
+          heightLeft -= pageH;
+        }
+      }
+      pdf.save(this._letterFileName(data));
+    } catch (e) {
+      el.style.border = prevBorder;
+      this.toast(`PDF export failed: ${e.message}`, 'error');
+    }
   };
 
   approveDraft = async (draftId, idx) => {
@@ -518,7 +598,11 @@ class AiDrafting extends React.Component {
     const isUser = role === 'user';
 
     return (
-      <Box key={msg.id || idx} sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'flex-start', flexDirection: isUser ? 'row-reverse' : 'row' }}>
+      <Box
+        key={msg.id || idx}
+        ref={(el) => { this.messageRefs[msg.id || idx] = el; }}
+        sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'flex-start', flexDirection: isUser ? 'row-reverse' : 'row' }}
+      >
         <Avatar sx={{
           width: 32, height: 32, mt: 0.25,
           bgcolor: isUser ? '#2563EB' : '#F3F4F6',
@@ -526,7 +610,7 @@ class AiDrafting extends React.Component {
         }}>
           {isUser ? <PersonIcon sx={{ fontSize: 16 }} /> : <RobotIcon sx={{ fontSize: 16 }} />}
         </Avatar>
-        <Box sx={{ maxWidth: '75%', minWidth: 60 }}>
+        <Box sx={{ maxWidth: (!isUser && msg.letter_data) ? 860 : '75%', minWidth: 60, width: (!isUser && msg.letter_data) ? '100%' : 'auto' }}>
           {msg.draft_version && (
             <Chip
               size="small"
@@ -534,19 +618,28 @@ class AiDrafting extends React.Component {
               sx={{ height: 22, fontSize: 11, mb: 0.75, bgcolor: isUser ? 'rgba(255,255,255,0.2)' : '#F3F4F6', color: isUser ? '#fff' : '#6B7280' }}
             />
           )}
-          <Box sx={{
-            px: 2.5, py: isUser ? 1.5 : 2,
-            bgcolor: isUser ? '#2563EB' : '#FFFFFF',
-            color: isUser ? '#fff' : '#374151',
-            border: isUser ? 'none' : '1px solid #E5E7EB',
-            borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-            boxShadow: isUser ? '0 1px 2px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
-          }}>
-            {isUser
-              ? <Typography sx={{ fontSize: 14, lineHeight: 1.6 }}>{msg.content}</Typography>
-              : this.renderDraftText(msg.content)
-            }
-          </Box>
+          {(!isUser && msg.letter_data) ? (
+            <Box sx={{ overflowX: 'auto' }}>
+              <SystraLetter
+                data={msg.letter_data}
+                innerRef={(el) => { this.letterRefs[msg.id || idx] = el; }}
+              />
+            </Box>
+          ) : (
+            <Box sx={{
+              px: 2.5, py: isUser ? 1.5 : 2,
+              bgcolor: isUser ? '#2563EB' : '#FFFFFF',
+              color: isUser ? '#fff' : '#374151',
+              border: isUser ? 'none' : '1px solid #E5E7EB',
+              borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+              boxShadow: isUser ? '0 1px 2px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
+            }}>
+              {isUser
+                ? <Typography sx={{ fontSize: 14, lineHeight: 1.6 }}>{msg.content}</Typography>
+                : this.renderDraftText(msg.content)
+              }
+            </Box>
+          )}
           {!isUser && (
             <Stack direction="row" spacing={0.5} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
               <Tooltip title="Regenerate">
@@ -559,6 +652,13 @@ class AiDrafting extends React.Component {
                   <CopyIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
+              {msg.letter_data ? (
+                <Tooltip title="Download PDF">
+                  <IconButton size="small" onClick={() => this.downloadLetterPdf(msg.id || idx, msg.letter_data)} sx={{ color: '#6B7280', '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' } }}>
+                    <PdfIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
               {approved
                 ? (
                   <Chip
@@ -636,8 +736,12 @@ class AiDrafting extends React.Component {
                     onClick={this.startNewDraft}
                     sx={{
                       textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '10px',
-                      bgcolor: '#2563EB', boxShadow: 'none',
-                      '&:hover': { bgcolor: '#1D4ED8', boxShadow: 'none' },
+                      color: '#fff', boxShadow: 'none',
+                      // `&&` doubles selector specificity so the fill beats the global
+                      // `.ccm-scope button { background: none }` rule (otherwise the
+                      // blue only showed on hover).
+                      '&&': { bgcolor: '#2563EB' },
+                      '&&:hover': { bgcolor: '#1D4ED8', boxShadow: 'none' },
                     }}
                   >
                     New Draft

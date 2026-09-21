@@ -125,6 +125,7 @@ async def get_session(
                 msg_dict["context_documents"] = draft.context_documents or []
                 msg_dict["draft_status"] = draft.status
                 msg_dict["draft_version"] = draft.version
+                msg_dict["letter_data"] = draft.letter_data
         messages_out.append(msg_dict)
 
     session_dict["messages"] = messages_out

@@ -1,17 +1,27 @@
 # CCM Architecture — Complete Analysis
 
+> **Updated 2026-09-15.** The original analysis (2026-07-28) predates the "Phase 4" and "Phase 8" migrations
+> (`backend/alembic/versions/510deff1ada4_...` through `f0a1b2c3d4e5_phase4j_deprecate_master_records.py`,
+> and `8744280b2d28_phase8_remove_financial_and_project_structure_tables.py`, run 2026-07-29/30). Those
+> migrations (a) extracted almost every Master/Admin entity out of the EAV `master_records` table into
+> dedicated tables, and (b) **dropped** the commercial/PMO tables entirely (`activities`, `activity_groups`,
+> `work_packages`, `variation_orders`, `monthly_breakups`, `estimation_months`, `reference_documents`).
+> Sections 2, 3 (Flow 4), 4, 5, 7.14–7.15, and 15 below have been revised accordingly; everything about the
+> CCM Core (letters/drafts/knowledge base/drafting sessions/jobs/webhooks) was re-verified and is unchanged.
+
 ## 1. High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        FRONTEND (React + Vite)                  │
-│   Port 5000  |  Base path: /master/  |  Proxies /api → :8000   │
+│   Port 5000  |  Base path: /master/  |  Proxies /api → :8001   │
 │   MUI v9 + framer-motion + chart.js + recharts                  │
 └──────────────────────┬──────────────────────────────────────────┘
                        │ HTTP (JSON) + WebSocket
 ┌──────────────────────▼──────────────────────────────────────────┐
 │                    BACKEND (FastAPI + uvicorn)                   │
-│   Port 8000  |  ~165 endpoints  |  async SQLAlchemy + asyncpg   │
+│   Port 8001 (local dev, per vite.config.js) / 8000 (Docker)    │
+│   ~145 endpoints  |  async SQLAlchemy + asyncpg                │
 │   Two parallel sub-apps: CCM Core + Master/Admin                 │
 └───────┬──────────┬──────────┬──────────┬───────────────────────┘
         │          │          │          │
@@ -35,9 +45,21 @@ The AI-powered construction correspondence management system. Uses dedicated nor
 
 ### B. Master/Admin (`/common/*`)
 
-A legacy admin CRUD sub-app ported from a vanilla JS application. Uses the **EAV pattern** — almost everything stored in a single `master_records` table with an `entity` discriminator and JSONB `data` column.
+An admin CRUD sub-app, originally ported from a vanilla JS application and originally backed by an EAV
+`master_records` table. **That EAV table has since been fully extracted and deprecated** (migrations
+`phase4` → `phase4j`, 2026-07-29): every Master/Admin entity now lives in its own dedicated table in the
+`Master` schema (`contractors`, `contracts`, `common_roles`, `role_rights`, `ui_modules`, `module_groups`,
+`project_master`, `project_details`, `user_directory`, `user_roles`, `user_access_filters`, `user_logs`,
+`error_logs`, `auto_notifications`, `approver_roles`, plus the pre-existing `departments`, `designations`,
+`locations`, `units`, `lookups`). There is no `master_records` model or table left in the codebase.
 
-**They share one critical link:** the `Master.users` table (authentication). Both systems validate JWT tokens from the same user pool.
+Separately, `phase8` (2026-07-30) **dropped** the PMO/commercial-tracking part of this sub-app entirely —
+`activities`, `activity_groups`, `work_packages`, `variation_orders`, `monthly_breakups`,
+`estimation_months`, and `reference_documents` no longer exist as tables, models, API routers, or routes.
+Only their `.pyc` cache files remain under `backend/api/master/__pycache__/`. If the frontend still links to
+these, those links are dead.
+
+**They share one critical link:** the `Master.users` table (authentication). Both systems validate JWT tokens from the same user pool. Note `Master.users` (auth) is distinct from `Master.user_directory` (admin-panel user list) — see the "Important Distinctions" note in `MASTER_API_ROUTE_TO_TABLE_MAP.md`.
 
 ---
 
@@ -144,7 +166,7 @@ USER starts a new drafting session
 
 ---
 
-### Flow 4: Master/Admin CRUD (EAV Pattern)
+### Flow 4: Master/Admin CRUD (dedicated per-entity tables)
 
 ```
 USER opens "Department Master" panel
@@ -162,36 +184,56 @@ USER opens "Department Master" panel
 USER opens "Contractor Master" panel
   │
   ├─► GET /common/getContractors
-  │     └─► mr_list(db, entity="contractor")     → SELECT FROM "Master".master_records
-  │           WHERE entity='contractor'           → single JSONB row per contractor
+  │     └─► SELECT * FROM "Master".contractors   → dedicated `Contractor` ORM model
   │
   ├─► User saves a contractor
   │
   └─► POST /common/saveContractorDetails
-        └─► mr_save(db, entity="contractor")     → INSERT/UPDATE "Master".master_records
-              (stores full PascalCase JSON in data JSONB column)
+        └─► upsert_model(Contractor, body)        → INSERT/UPDATE "Master".contractors (soft delete via status)
 ```
 
-**Key insight:** Some master entities use dedicated tables (departments, designations, locations, units, lookups). Most others use the EAV `master_records` table.
+**Key insight:** Every Master/Admin entity now uses a dedicated table (departments, designations, locations,
+units, lookups, contractors, contracts, common_roles, role_rights, ui_modules, module_groups,
+project_master, project_details, user_directory, user_roles, user_access_filters, user_logs, error_logs,
+auto_notifications, approver_roles). The EAV `master_records` catch-all table has been fully extracted away
+and no longer exists.
 
 ---
 
-## 4. Complete Table Map (41 Tables)
+## 4. Complete Table Map
 
-### Master Schema (10 tables) — "Who has access"
+### Master Schema (24 tables) — "Who has access" + admin-panel master data
 
 | Table | Purpose | Populated By |
 |-------|---------|-------------|
-| `Master.users` | User accounts (email, password, role, Azure OID) | Auth API, Azure SSO JIT-provisioning |
-| `Master.roles` | RBAC role definitions (admin, drafter) | `db_seed.py` |
-| `Master.modules` | Permission module keys (32 modules) | `db_seed.py` |
-| `Master.role_permissions` | Role→Module permission matrix | `db_seed.py` |
+| `Master.users` | Auth user accounts (email, password, role, Azure OID) | Auth API, Azure SSO JIT-provisioning |
+| `Master.roles` | Auth RBAC role definitions (admin, drafter) | `db_seed.py` |
+| `Master.modules` | Auth permission module keys | `db_seed.py` |
+| `Master.role_permissions` | Auth role→module permission matrix | `db_seed.py` |
 | `Master.departments` | Organizational departments (hierarchical) | `/common/saveDepartmentDetails` |
 | `Master.designations` | Job designations (hierarchical) | `/common/saveDesignationDetails` |
 | `Master.locations` | Project locations (hierarchical) | `/common/saveLocationDetails` |
 | `Master.units` | Measurement units | `/common/saveUnitDetails` |
 | `Master.lookups` | Generic lookup/reference data | `/common/saveLookupDetails` |
-| `Master.master_records` | **EAV catch-all** for everything else | ~20 different `/common/*` endpoints |
+| `Master.contractors` | Contractor master | `/common/saveContractorDetails` |
+| `Master.contracts` | Contract master | `/common/saveContractDetails` |
+| `Master.common_roles` | Admin-panel role master (distinct from `Master.roles`) | `/common/saveRoles` |
+| `Master.role_rights` | Admin-panel role rights | `/common/saveRoleRightDetails` |
+| `Master.ui_modules` | Admin-editable UI menu modules (distinct from `Master.modules`) | `/common/saveModuleDetails` |
+| `Master.module_groups` | UI menu module groups | `/common/saveModuleGroupDetails` |
+| `Master.project_master` | Admin/master project list (distinct from `public.projects`) | `/common/saveProjectDetails` |
+| `Master.project_details` | PMO/project detail rows | `/common/saveProjectDetailsData` |
+| `Master.user_directory` | Admin-panel user directory (distinct from `Master.users`) | `/common/saveUserDetails` |
+| `Master.user_roles` | User→role assignments | `/common/saveUserRoles` |
+| `Master.user_access_filters` | Per-user business unit/line/project access filters | `/common/saveUserRoles` |
+| `Master.user_logs` | Admin/session user activity logs | `/common/saveUserLogDetails` |
+| `Master.error_logs` | Application error logs | logged internally |
+| `Master.auto_notifications` | Auto-notification rule master | `/common/saveAutoNotificationDetails` |
+| `Master.approver_roles` | Approver role list | (list-only currently) |
+
+**Dropped (2026-07-30, `phase8` migration) — no longer exist:** `Master.master_records` (EAV catch-all),
+`Master.estimation_months`, `Master.monthly_breakups`, `Master.variation_orders`, `Master.activities`,
+`Master.activity_groups`, `Master.work_packages`, `Master.reference_documents`.
 
 ### Public Schema (31 tables) — "What the system does"
 
@@ -214,34 +256,30 @@ USER opens "Contractor Master" panel
 | `revoked_tokens` | JWT refresh token blacklist | Auth (logout/refresh) |
 | `password_reset_tokens` | Password reset tokens | Auth (forgot-password) |
 | `sharepoint_sync_log` | SharePoint sync run history | `sharepoint_sync.py` |
-| `alembic_version` | Alembic migration tracking | Alembic (legacy) |
-| `master_department` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_designation` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_location` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_unit` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_lookup` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_module` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_module_group` | **Legacy** pre-migration data | Never migrated (orphan) |
-| `master_project` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_project_details` | **Legacy** pre-migration data | Never migrated (orphan) |
-| `master_role` | **Legacy** pre-migration data | Migration 001 (source) |
-| `master_role_right` | **Legacy** pre-migration data | Never migrated (orphan) |
-| `master_user` | **Legacy** pre-migration data | Never migrated (orphan) |
-| `master_user_role` | **Legacy** pre-migration data | Never migrated (orphan) |
+| `alembic_version` | Alembic migration tracking | Alembic |
+
+**Note:** the old pre-migration `public.master_*` PascalCase legacy tables (`master_department`,
+`master_designation`, `master_user`, etc.) described in earlier versions of this doc as "not yet dropped"
+**have been dropped** — see `phase2_drop_legacy_tables.py` (2026-07-27), which removed all 13 (they were
+verified empty). They no longer exist.
 
 ---
 
-## 5. Which Tables Are Actually Used vs. Orphaned
+## 5. Which Tables Are Actually Used
 
-### Actively Used (27 tables)
+`Master.users`, `Master.roles`, `Master.modules`, `Master.role_permissions`, `Master.departments`,
+`Master.designations`, `Master.locations`, `Master.units`, `Master.lookups`, `Master.contractors`,
+`Master.contracts`, `Master.common_roles`, `Master.role_rights`, `Master.ui_modules`, `Master.module_groups`,
+`Master.project_master`, `Master.project_details`, `Master.user_directory`, `Master.user_roles`,
+`Master.user_access_filters`, `Master.user_logs`, `Master.error_logs`, `Master.auto_notifications`,
+`Master.approver_roles`, `projects`, `inbound_letters`, `draft_responses`, `knowledge_documents`,
+`document_chunks`, `drafting_sessions`, `drafting_messages`, `prompt_templates`, `jobs`, `audit_logs`,
+`files`, `webhooks`, `webhook_deliveries`, `email_notification_settings`, `revoked_tokens`,
+`password_reset_tokens`, `sharepoint_sync_log`
 
-`Master.users`, `Master.roles`, `Master.modules`, `Master.role_permissions`, `Master.departments`, `Master.designations`, `Master.locations`, `Master.units`, `Master.lookups`, `Master.master_records`, `projects`, `inbound_letters`, `draft_responses`, `knowledge_documents`, `document_chunks`, `drafting_sessions`, `drafting_messages`, `prompt_templates`, `jobs`, `audit_logs`, `files`, `webhooks`, `webhook_deliveries`, `email_notification_settings`, `revoked_tokens`, `password_reset_tokens`, `sharepoint_sync_log`
-
-### Legacy/Orphaned (14 tables) — Safe to Drop After Migration 002
-
-`master_department`, `master_designation`, `master_location`, `master_unit`, `master_lookup`, `master_module`, `master_module_group`, `master_project`, `master_project_details`, `master_role`, `master_role_right`, `master_user`, `master_user_role`, `alembic_version`
-
-These are the old pre-migration tables. Migration 001 copied their data into the consolidated schema. Migration 002 (`_002_drop_master_tables.py`) will DROP them all but has **not been run yet**.
+No orphaned/legacy tables remain — both the pre-migration `public.master_*` tables and the EAV
+`master_records` table have been dropped, and the PMO/commercial tables were dropped outright in `phase8`
+rather than migrated.
 
 ---
 
@@ -289,7 +327,7 @@ webhooks (PK: id)
 
 ---
 
-## 7. Complete API Endpoint Inventory (~165 endpoints)
+## 7. Complete API Endpoint Inventory (~145 endpoints; down from ~165 since §7.15/§7.16 shrank)
 
 ### 7.1 CCM Core Auth (`/api/auth`)
 
@@ -456,79 +494,69 @@ webhooks (PK: id)
 | 19 | POST | `/common/SaveUnitBulkDetails` | Bulk upsert units | `units` |
 | 20 | POST | `/common/deleteUnitDetails` | Delete unit | `units` |
 
-### 7.15 Master Roles, Modules, Users, Projects, etc. (`/common`)
+### 7.15 Master Roles, Modules, Users, Projects, Contractors, Contracts, Logs (`/common`)
+
+Route→table mapping verified against `MASTER_API_ROUTE_TO_TABLE_MAP.md` (2026-09-10). The EAV `master_records`
+table these all used to hit is gone — everything below is now a dedicated table, and the
+activities/work-packages/variation-orders/monthly-breakups/estimation-months/reference-documents endpoints
+that used to live in this section **no longer exist** (routers deleted in `phase8`, only stale `.pyc` files
+remain under `backend/api/master/__pycache__/`).
 
 | # | Method | Path | Description | Table |
 |---|--------|------|-------------|-------|
-| 1 | GET | `/common/getRoles` | Get master roles | `master_records` |
-| 2 | POST | `/common/saveRoles` | Save master role | `master_records` |
-| 3 | POST | `/common/deleteRoles` | Delete master role | `master_records` |
-| 4 | GET | `/common/getRoleRightDetails` | Get role rights | `master_records` |
-| 5 | POST | `/common/saveRoleRightDetails` | Save role rights | `master_records` |
-| 6 | POST | `/common/deleteRoleRightDetails` | Delete role right | `master_records` |
-| 7 | POST | `/common/getModules` | List UI modules | `master_records` |
-| 8 | POST | `/common/saveModuleDetails` | Save UI module | `master_records` |
-| 9 | POST | `/common/deleteModuleDetails` | Delete UI module | `master_records` |
-| 10 | GET | `/common/getModuleGroups` | Get module groups | `master_records` |
-| 11 | POST | `/common/getModuleGroups` | Get module groups (POST) | `master_records` |
-| 12 | POST | `/common/saveModuleGroupDetails` | Save module group | `master_records` |
-| 13 | POST | `/common/deleteModuleGroupDetails` | Delete module group | `master_records` |
-| 14 | POST | `/common/getUsers` | List master user directory | `master_records` |
-| 15 | POST | `/common/getUserDetails` | Get user details / OTP login | `master_records`, `users` |
-| 16 | POST | `/common/saveUserDetails` | Save master user record | `master_records` |
-| 17 | POST | `/common/deleteUserDetails` | Delete master user | `master_records` |
-| 18 | POST | `/common/getUserRights` | Get admin sidebar menu tree | None (static) |
-| 19 | GET | `/common/getUserRights` | Same (GET variant) | None (static) |
-| 20 | POST | `/common/GetUserAccessFilters` | Get user access filters | `master_records` |
-| 21 | GET | `/common/getUserRoles` | Get user roles | `master_records` |
-| 22 | POST | `/common/saveUserRoles` | Save user role assignment | `master_records` |
-| 23 | POST | `/common/deleteUserRoles` | Delete user role assignment | `master_records` |
-| 24 | GET | `/common/getApproverRoles` | Get approver roles | `master_records` |
-| 25 | POST | `/common/updateTourStatus` | Update onboarding status | None (stub) |
-| 26 | POST | `/common/getProjects` | List project masters | `master_records` |
-| 27 | GET | `/common/getProjects` | List project masters (GET) | `master_records` |
-| 28 | POST | `/common/getProjectDetails` | Get project detail rows | `master_records` |
-| 29 | POST | `/common/saveProjectDetails` | Save project master | `master_records` |
-| 30 | POST | `/common/saveProjectDetailsData` | Save project detail | `master_records` |
-| 31 | POST | `/common/deleteProjectDetails` | Delete project master | `master_records` |
-| 32 | POST | `/common/deleteProjectDetailsData` | Delete project detail | `master_records` |
-| 33 | GET | `/common/getContractors` | List contractors | `master_records` |
-| 34 | POST | `/common/saveContractorDetails` | Save contractor | `master_records` |
-| 35 | POST | `/common/deleteContractorDetails` | Delete contractor | `master_records` |
-| 36 | POST | `/common/getContracts` | List contracts | `master_records` |
-| 37 | POST | `/common/saveContractDetails` | Save contract | `master_records` |
-| 38 | POST | `/common/deleteContractDetails` | Delete contract | `master_records` |
-| 39 | GET | `/common/getActivityGroup` | Get activity groups | `master_records` |
-| 40 | POST | `/common/saveActivityGroupDetails` | Save activity group | `master_records` |
-| 41 | POST | `/common/deleteActivityGroupDetails` | Delete activity group | `master_records` |
-| 42 | GET | `/common/getActivity` | Get activities | `master_records` |
-| 43 | GET | `/common/getSubActivity` | Get sub-activities | `master_records` |
-| 44 | POST | `/common/saveActivityDetails` | Save activity | `master_records` |
-| 45 | POST | `/common/saveActivityBulkDetails` | Bulk save activities | `master_records` |
-| 46 | POST | `/common/deleteActivityDetails` | Delete activity | `master_records` |
-| 47 | GET | `/common/getWorkPackage` | Get work packages | `master_records` |
-| 48 | GET | `/common/getVariationOrderDetails` | List variation orders | `master_records` |
-| 49 | POST | `/common/saveVariationOrderData` | Save variation order | `master_records` |
-| 50 | POST | `/common/deleteVariationOrderData` | Delete variation order | `master_records` |
-| 51 | POST | `/common/getMonthlyBreakUpDetailsData` | List monthly breakups | `master_records` |
-| 52 | POST | `/common/saveMonthlyBreakUpDetailsData` | Save monthly breakup | `master_records` |
-| 53 | POST | `/common/deleteMontlyBreakUpDetailsData` | Delete monthly breakup | `master_records` |
-| 54 | GET | `/common/getEstimationMonths` | List estimation months | `master_records` |
-| 55 | GET | `/common/GetAutoNotification` | List auto notifications | `master_records` |
-| 56 | POST | `/common/saveAutoNotificationDetails` | Save auto notification | `master_records` |
-| 57 | POST | `/common/deleteAutoNotificationDetails` | Delete auto notification | `master_records` |
-| 58 | POST | `/common/getUserLogs` | List user logs | `master_records` |
-| 59 | POST | `/common/saveUserLogDetails` | Save user log | `master_records` |
-| 60 | POST | `/common/getErrorLogs` | List error logs | `master_records` |
-| 61 | POST | `/common/getTestApi` | Test echo endpoint | None |
-| 62 | POST | `/common/isRecordExists` | Check record exists | `master_records` |
-| 63 | GET | `/common/getDocuments` | List reference documents | `master_records` |
-| 64 | POST | `/common/saveDocuments` | Save reference document | `master_records` |
-| 65 | POST | `/common/deleteDocuments` | Delete reference document | `master_records` |
-| 66 | POST | `/common/saveProjectAttachment` | Accept project file upload | None (stub) |
-| 67 | POST | `/common/saveContractAttachment` | Accept contract file upload | None (stub) |
-| 68 | POST | `/common/saveContractorAttachment` | Accept contractor file upload | None (stub) |
-| 69 | POST | `/common/saveDocumentAttachment` | Accept document file upload | None (stub) |
+| 1 | GET | `/common/getRoles` | Get admin-panel roles | `common_roles` |
+| 2 | POST | `/common/saveRoles` | Save admin-panel role | `common_roles` |
+| 3 | POST | `/common/deleteRoles` | Delete admin-panel role (soft) | `common_roles` |
+| 4 | GET | `/common/getRoleRightDetails` | Get role rights | `role_rights` |
+| 5 | POST | `/common/saveRoleRightDetails` | Save role rights | `role_rights` |
+| 6 | POST | `/common/deleteRoleRightDetails` | Delete role right (soft) | `role_rights` |
+| 7 | POST | `/common/getModules` | List UI menu modules | `ui_modules` |
+| 8 | POST | `/common/saveModuleDetails` | Save UI menu module | `ui_modules` |
+| 9 | POST | `/common/deleteModuleDetails` | Delete UI menu module (soft) | `ui_modules` |
+| 10 | GET/POST | `/common/getModuleGroups` | Get module groups | `module_groups` |
+| 11 | POST | `/common/saveModuleGroupDetails` | Save module group | `module_groups` |
+| 12 | POST | `/common/deleteModuleGroupDetails` | Delete module group (soft) | `module_groups` |
+| 13 | POST | `/common/getUsers` | List admin user directory | `user_directory` |
+| 14 | POST | `/common/getUserDetails` | Get user details, or OTP login if `UserName` passed | `user_directory` (or `Master.users` for OTP) |
+| 15 | POST | `/common/saveUserDetails` | Save admin directory user | `user_directory` |
+| 16 | POST | `/common/deleteUserDetails` | Delete admin directory user (soft) | `user_directory` |
+| 17 | GET/POST | `/common/getUserRights` | Get admin sidebar menu tree | None (static, `_menu.py`) |
+| 18 | POST | `/common/GetUserAccessFilters` | Get raw user access filter rows | `user_access_filters` |
+| 19 | GET | `/common/getUserRoles` | Get user roles + aggregated access filters | `user_roles` + `user_access_filters` |
+| 20 | POST | `/common/saveUserRoles` (alias `saveUserRoleDetails`) | Save user role + replace filter rows | `user_roles` + `user_access_filters` |
+| 21 | POST | `/common/deleteUserRoles` (alias `deleteUserRoleDetails`) | Delete user role + filter rows | `user_roles` + `user_access_filters` |
+| 22 | GET | `/common/getApproverRoles` | List approver roles | `approver_roles` |
+| 23 | POST | `/common/updateTourStatus` | Update onboarding status | None (stub) |
+| 24 | GET/POST | `/common/getProjects` | List admin/master project list | `project_master` |
+| 25 | POST | `/common/getProjectDetails` | Get project detail rows | `project_details` |
+| 26 | POST | `/common/saveProjectDetails` | Save project master | `project_master` |
+| 27 | POST | `/common/saveProjectDetailsData` | Save project detail | `project_details` |
+| 28 | POST | `/common/deleteProjectDetails` | Delete project master (soft) | `project_master` |
+| 29 | POST | `/common/deleteProjectDetailsData` | Delete project detail (soft) | `project_details` |
+| 30 | GET | `/common/getContractors` | List contractors | `contractors` |
+| 31 | POST | `/common/saveContractorDetails` | Save contractor | `contractors` |
+| 32 | POST | `/common/deleteContractorDetails` | Delete contractor (soft) | `contractors` |
+| 33 | POST | `/common/getContracts` | List contracts | `contracts` |
+| 34 | POST | `/common/saveContractDetails` | Save contract | `contracts` |
+| 35 | POST | `/common/deleteContractDetails` | Delete contract (soft) | `contracts` |
+| 36 | GET | `/common/GetAutoNotification` | List auto notifications | `auto_notifications` |
+| 37 | POST | `/common/saveAutoNotificationDetails` | Save auto notification | `auto_notifications` |
+| 38 | POST | `/common/deleteAutoNotificationDetails` | Delete auto notification (soft) | `auto_notifications` |
+| 39 | POST | `/common/getUserLogs` | List user logs | `user_logs` |
+| 40 | POST | `/common/saveUserLogDetails` | Save user log | `user_logs` |
+| 41 | POST | `/common/getErrorLogs` | List error logs | `error_logs` |
+| 42 | POST | `/common/getTestApi` | Test echo endpoint | None |
+| 43 | POST | `/common/isRecordExists` | Duplicate-check helper over relational master routes | None (helper) |
+| 44 | POST | `/common/saveProjectAttachment` | Accept project file upload | None (stub — reads for size only) |
+| 45 | POST | `/common/saveContractAttachment` | Accept contract file upload | None (stub) |
+| 46 | POST | `/common/saveContractorAttachment` | Accept contractor file upload | None (stub) |
+| 47 | POST | `/common/saveDocumentAttachment` | Accept document file upload | None (stub) |
+
+**Removed entirely (no longer routed, table dropped):** `/common/getActivityGroup`, `saveActivityGroupDetails`,
+`deleteActivityGroupDetails`, `getActivity`, `getSubActivity`, `saveActivityDetails`, `saveActivityBulkDetails`,
+`deleteActivityDetails`, `getWorkPackage`, `getVariationOrderDetails`, `saveVariationOrderData`,
+`deleteVariationOrderData`, `getMonthlyBreakUpDetailsData`, `saveMonthlyBreakUpDetailsData`,
+`deleteMontlyBreakUpDetailsData`, `getEstimationMonths`, `getDocuments`, `saveDocuments`, `deleteDocuments`.
 
 ### 7.16 Health, Metrics & Misc
 
@@ -590,11 +618,19 @@ webhooks (PK: id)
 
 ## 11. Database Migrations
 
-| Migration | File | Purpose | Status |
-|-----------|------|---------|--------|
-| 001 | `_001_consolidate_master_data.py` | Copy legacy `master_*` tables into consolidated schema | ✅ Run |
-| 002 | `_002_drop_master_tables.py` | Drop legacy `master_*` tables after verification | ⏳ Not run |
-| 003 | `_003_move_master_to_schema.py` | Move admin tables from `public` to `Master` schema | ✅ Run |
+The project moved from numbered migrations to a phased Alembic chain under `backend/alembic/versions/`.
+All of the below have run:
+
+| Phase | File (prefix) | Purpose |
+|-------|------|---------|
+| baseline | `20260725_000_baseline.py` | Initial schema baseline |
+| 2 | `9ce0a4ace0dd_phase2_drop_legacy_tables.py` | Drop the 13 empty pre-migration `public.master_*` PascalCase tables |
+| 3 | `022407ca7fbe_phase3_structural_fixes_indexes_fks.py` | Structural fixes, indexes, FKs |
+| 4 → 4j | `510deff1ada4_...` through `f0a1b2c3d4e5_phase4j_deprecate_master_records.py` | Extract contractors, activities, contracts, common_roles, modules, logs, reference_documents, project/user-directory entities, and remaining EAV rows out of `master_records`, then deprecate/drop that table |
+| 5 | `a1b2c3d4e5f6_phase5_pgvector.py` | Enable pgvector |
+| 6 | `b2c3d4e5f6a7_phase6_rbac_consolidation.py` | RBAC consolidation |
+| 7 | `c3d4e5f6a7b8_phase7_audit_logs_partitioning.py` | Audit log partitioning |
+| 8 | `8744280b2d28_phase8_remove_financial_and_project_structure_tables.py` | **Drop** `activities`, `activity_groups`, `work_packages`, `variation_orders`, `monthly_breakups`, `estimation_months`, `reference_documents` — this scope was cut, not migrated |
 
 ---
 
@@ -609,15 +645,18 @@ Called idempotently from `init_db()` on every startup.
 | `admin` | Full system access |
 | `drafter` | Creates letters, drafts, and knowledge base entries |
 
-### Modules (32 total)
+### Modules (28 total, per `backend/db_seed.py`)
 
-**CCM core:** `users`, `roles`, `prompts`, `letters`, `knowledge`, `jobs`, `webhooks`, `review`, `projects`, `drafts`, `files`, `drafting_sessions`, `notifications`
+**CCM core (13):** `users`, `roles`, `prompts`, `letters`, `knowledge`, `jobs`, `webhooks`, `review`, `projects`, `drafts`, `files`, `drafting_sessions`, `notifications`
 
-**Master/Admin:** `departments`, `locations`, `designations`, `units`, `lookups`, `ui_modules`, `module_groups`, `projects_master`, `contractors`, `contracts`, `activities`, `variation_orders`, `monthly_breakup`, `auto_notifications`, `reference_documents`, `user_roles`, `role_rights`, `user_logs`, `error_logs`, `api_test`
+**Master/Admin (15):** `departments`, `locations`, `designations`, `units`, `lookups`, `ui_modules`, `module_groups`, `projects_master`, `contractors`, `contracts`, `auto_notifications`, `user_roles`, `role_rights`, `user_logs`, `error_logs`, `api_test`
+
+`activities`, `variation_orders`, `monthly_breakup`, and `reference_documents` modules **no longer exist**
+(dropped from the seed along with their tables/routers in `phase8`).
 
 ### Permissions
 
-- **admin**: Full CRUD on all 32 modules
+- **admin**: Full CRUD on all 28 modules
 - **drafter**: Selective (letters, knowledge, drafts, files, sessions, projects, jobs, notifications)
 
 ---
@@ -626,7 +665,7 @@ Called idempotently from `init_db()` on every startup.
 
 | Integration | Config | Status | Used By |
 |-------------|--------|--------|---------|
-| **OpenAI API** | `AI__OPENAI_API_KEY` | ⚠️ Failing (corporate SSL proxy) | Classification, drafting, embeddings, vision |
+| **OpenAI API** | `AI__OPENAI_API_KEY` | ✅ OK (verified via `/health`, ~1.3s latency) | Classification, drafting, embeddings, vision |
 | **Redis** | `REDIS__URL` (empty) | Disabled, inline fallback | Background job queue |
 | **SMTP** | `SMTP_HOST/USER/PASSWORD` env vars | Unconfigured | Email notifications |
 | **S3/MinIO** | `STORAGE__BACKEND=s3` | Using local storage | File persistence |

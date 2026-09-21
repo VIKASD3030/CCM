@@ -12,7 +12,7 @@ export default {
         //   icon: 'icon-drop',
         // },
         {
-          name: 'AI Drafting',
+          name: 'AI Agent for Contract & Claim Management',
           url: '/master/ai-drafting',
           icon: 'icon-drop',
         },

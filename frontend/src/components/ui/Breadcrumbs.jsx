@@ -19,7 +19,7 @@ const routeLabels = {
   '/master/module-master': 'Modules',
   '/master/view-user-logs': 'User Logs',
   '/master/view-user-errors': 'User Errors',
-  '/master/ai-drafting': 'AI Drafting',
+  '/master/ai-drafting': 'AI Agent for Contract & Claim Management',
 };
 
 export default function AppBreadcrumbs({ items }) {

@@ -29,6 +29,9 @@ class DraftResponse(Base):
         nullable=False,
     )
     draft_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Structured SYSTRA LetterData (recipient, subject, body paragraphs, signatory,
+    # branding, …) used to render the branded letter document deterministically.
+    letter_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(
         String(50), default="pending_review"
@@ -65,6 +68,7 @@ class DraftResponse(Base):
             "letter_id": str(self.letter_id),
             "project_id": str(self.project_id) if self.project_id else None,
             "draft_text": self.draft_text,
+            "letter_data": self.letter_data,
             "version": self.version,
             "status": self.status,
             "reviewer_notes": self.reviewer_notes,

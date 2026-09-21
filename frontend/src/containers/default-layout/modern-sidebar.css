@@ -184,12 +184,20 @@
   justify-content: center;
   margin-right: 12px;
   color: inherit;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .modern-sidebar-nav-button:hover .nav-icon,
 .modern-sidebar-nav-button.active .nav-icon {
   opacity: 1;
+}
+
+/* Module header (top-level, collapsible) — slightly stronger than a plain
+   sub-module row so it reads as the group's title. */
+.modern-sidebar-module-button {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 2px;
 }
 
 .modern-sidebar-nav-button .nav-chevron {
@@ -286,12 +294,29 @@
 
 .modern-sidebar-nav-submenu-item .sub-icon {
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .modern-sidebar-nav-submenu-item:hover .sub-icon,
 .modern-sidebar-nav-submenu-item.active .sub-icon {
   opacity: 1;
+}
+
+.modern-sidebar-nav-submenu-item .nav-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.22s ease;
+}
+
+.modern-sidebar-nav-submenu-item .nav-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* A sub-module's own children (rare — only when nav data nests 3 levels
+   deep) get one further indent. */
+.modern-sidebar-nav-submenu--nested {
+  padding-left: 18px;
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────── */
@@ -329,7 +354,36 @@
   }
 }
 
-/* ── Mobile Overlay ──────────────────────────────────────────────────── */
+/* ── Desktop / mobile shells ─────────────────────────────────────────────
+   Real CSS driving what used to be Tailwind's "hidden lg:block" / "lg:hidden"
+   utility classes — this project doesn't load Tailwind, so those classes were
+   no-ops and the desktop sidebar (with its own collapse button after the
+   logo) stayed visible at every width, duplicating the hamburger button
+   below 1024px. Only one of the two shells is ever displayed now. ────────── */
+.modern-sidebar-mobile-shell,
+.modern-sidebar-mobile-overlay {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .modern-sidebar-desktop-shell {
+    display: none;
+  }
+  .modern-sidebar-mobile-shell {
+    display: block;
+  }
+  .modern-sidebar-mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 40;
+  }
+}
+
+/* ── Mobile Overlay (legacy — superseded by .modern-sidebar-mobile-overlay
+   above; kept as-is since its selectors are inert and harmless) ─────────── */
 @media (max-width: 1023px) {
   .modern-sidebar {
     box-shadow: 4px 0 24px rgba(0,0,0,0.4);

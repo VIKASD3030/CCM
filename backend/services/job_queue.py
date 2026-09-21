@@ -1,6 +1,7 @@
 """
 Job queue service for managing background jobs with ARQ and pg_notify.
 """
+import asyncio
 import json
 import uuid
 import os
@@ -114,8 +115,19 @@ async def enqueue_job(
     created_by: uuid.UUID,
     priority: int = 0,
     max_attempts: int = 3,
+    background: bool = False,
 ) -> Job:
-    """Create a job record and enqueue it in ARQ."""
+    """Create a job record and enqueue it in ARQ.
+
+    `background=True` changes only the no-Redis fallback: instead of awaiting
+    the inline run (which would hold the caller's HTTP response open for the
+    task's full duration — e.g. an LLM call), it's scheduled as a fire-and-forget
+    asyncio task and this returns immediately with the job still "queued".
+    The task runs on its own DB session (see `_run_job_inline`/the task
+    functions in worker.py), so this is safe to detach from the request.
+    Used for letter-upload classification; see `drafting.generate_draft()`,
+    which classifies inline (a much shorter wait) if it isn't done yet.
+    """
     job = await create_job(db, job_type, payload, created_by, priority, max_attempts)
     await db.commit()
 
@@ -123,12 +135,27 @@ async def enqueue_job(
         # Enqueue in ARQ
         await arq_redis.enqueue_job(job_type, job_id=str(job.id), **payload)
         logger.info("job.enqueued", job_id=str(job.id), job_type=job_type)
+    elif background:
+        logger.info("job.running_inline_background", job_id=str(job.id), job_type=job_type)
+        task = asyncio.create_task(_run_job_inline(job_type, str(job.id), payload))
+        task.add_done_callback(_report_background_task_failure)
     else:
         # No Redis configured — run the job synchronously in-process.
         logger.info("job.running_inline", job_id=str(job.id), job_type=job_type)
         await _run_job_inline(job_type, str(job.id), payload)
 
     return job
+
+
+def _report_background_task_failure(task: "asyncio.Task") -> None:
+    """Log an exception from a fire-and-forget background job task instead of
+    letting it disappear silently (asyncio would otherwise only warn that the
+    exception was never retrieved)."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        logger.error("job.background_task_failed", error=str(exc))
 
 
 async def update_job_status(

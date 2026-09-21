@@ -679,6 +679,62 @@ async def azure_login(
     }
 
 
+# ===== TEMPORARY DEV-ONLY BYPASS — REMOVE THIS ENDPOINT ==================
+# Logs in as the given email with no password/OTP/Microsoft verification.
+# Added for local testing only; refuses to run outside ENVIRONMENT=development.
+@router.post("/dev-login")
+@limiter.limit("20/minute")
+async def dev_login(
+    request: Request,
+    body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    if settings.environment != "development":
+        raise HTTPException(status_code=404)
+
+    email = body.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="email is required")
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        user = User(
+            id=uuid_lib.uuid4(),
+            name=body.get("name") or email.split("@")[0],
+            email=email,
+            auth_provider="dev_bypass",
+            hashed_password=None,
+            role=body.get("role", "admin"),
+            is_active=True,
+        )
+        db.add(user)
+    user.last_login_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(user)
+
+    access_token = create_access_token(
+        data={"sub": str(user.id), "email": user.email, "role": user.role},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "refresh_token": refresh_token,
+        "user": {
+            "id": str(user.id),
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "auth_provider": user.auth_provider,
+            "is_active": user.is_active,
+        }
+    }
+# ===== END TEMPORARY DEV-ONLY BYPASS ======================================
+
+
 async def _record_failed_attempt(
     db: AsyncSession,
     user: Optional[User],

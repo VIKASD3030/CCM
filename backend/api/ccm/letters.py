@@ -35,9 +35,13 @@ async def upload_letter(
         project_id = None
 
     try:
+        # Fast path: extract text + save the letter only — no LLM call, so this
+        # returns almost immediately regardless of file size.
         letter = await letter_service.intake_letter(db, file.filename, content, ext, current_user.id, project_id=project_id)
 
-        # Enqueue classification as background job
+        # Classification (an LLM call) happens in the background so it never
+        # holds up the upload response. If a draft is requested before this
+        # finishes, generate_draft() classifies inline instead (~1-2s).
         arq_redis = await get_arq_redis()
         job = await enqueue_job(
             db=db,
@@ -45,6 +49,7 @@ async def upload_letter(
             job_type="classify_letter_task",
             payload={"letter_id": str(letter.id)},
             created_by=current_user.id,
+            background=True,
         )
 
         return {
