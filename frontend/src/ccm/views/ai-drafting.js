@@ -126,12 +126,12 @@ class AiDrafting extends React.Component {
       searchTerm: '',
       emptyInput: '',
       activeInput: '',
+      // header project selector
+      headerProjectId: '',
       // letter picker
       pickerOpen: false,
       pickerTab: 'select',
-      pickerProjectId: '',
       pickerSearch: '',
-      pickerUploadProjectId: '',
       uploadStatus: null,
       // sources
       sourcesOpen: false,
@@ -292,7 +292,7 @@ class AiDrafting extends React.Component {
     if (!file) return;
     this.setState({ uploadStatus: { type: 'loading', msg: `Uploading "${file.name}"…` } });
     try {
-      const projectId = this.state.pickerUploadProjectId || null;
+      const projectId = this.state.headerProjectId || null;
       const result = await CCM.letters.upload(file, projectId);
       // Classification now runs in the background (upload no longer waits on
       // it), so result.letter.category isn't populated yet — don't claim it is.
@@ -337,13 +337,15 @@ class AiDrafting extends React.Component {
       const letterName = this.state.currentLetterData?.filename || 'Draft';
       const category = this.state.currentLetterData?.category?.replace(/_/g, ' ') || '';
       const titleStr = (category ? `${letterName} — ${category}` : letterName).substring(0, 480);
-      const data = await CCM.draftingSessions.create(this.state.currentLetterId, this.state.currentProjectId || '', titleStr);
+      // Use the letter's own project_id first, fall back to the header-selected project
+      const projectId = this.state.currentProjectId || this.state.headerProjectId || '';
+      const data = await CCM.draftingSessions.create(this.state.currentLetterId, projectId, titleStr);
       const session = data.session;
       let currentProjectData = this.state.currentProjectData;
-      if (!currentProjectData && this.state.currentProjectId) {
-        try { const pd = await CCM.projects.get(this.state.currentProjectId); currentProjectData = pd.project || pd; } catch { /* */ }
+      if (!currentProjectData && projectId) {
+        try { const pd = await CCM.projects.get(projectId); currentProjectData = pd.project || pd; } catch { /* */ }
       }
-      this.setState({ currentSessionId: session.id, currentProjectData });
+      this.setState({ currentSessionId: session.id, currentProjectId: projectId, currentProjectData });
       await this.loadSessions();
     } catch (e) {
       this.toast(`Failed to create session: ${e.message}`, 'error');
@@ -690,12 +692,22 @@ class AiDrafting extends React.Component {
     );
   }
 
+  // ── Header project change ─────────────────────────────────
+  onHeaderProjectChange = (projectId) => {
+    const project = this.state.projects.find(p => p.id === projectId) || null;
+    this.setState({
+      headerProjectId: projectId,
+      currentProjectId: projectId || null,
+      currentProjectData: project,
+    });
+  };
+
   render() {
     const {
       sidebarCollapsed, templates, letters, projects, messages, activeView,
       currentLetterData, currentProjectData, emptyInput, activeInput, searchTerm,
-      pickerOpen, pickerTab, pickerProjectId, pickerSearch, pickerUploadProjectId,
-      uploadStatus, sourcesOpen, lastSourceDocs, profile,
+      pickerOpen, pickerTab, pickerSearch,
+      uploadStatus, sourcesOpen, lastSourceDocs, profile, headerProjectId,
     } = this.state;
 
     const name = profile?.name || profile?.email || 'User';
@@ -704,7 +716,8 @@ class AiDrafting extends React.Component {
 
     const pickerLetters = letters.filter(l => {
       const mq = !pickerSearch || (l.filename || '').toLowerCase().includes(pickerSearch.toLowerCase());
-      const mp = !pickerProjectId || l.project_id === pickerProjectId;
+      // filter by header-selected project if one is set
+      const mp = !headerProjectId || l.project_id === headerProjectId;
       return mq && mp;
     });
 
@@ -712,8 +725,34 @@ class AiDrafting extends React.Component {
 
     return (
       <Box className="ccm-scope" sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', bgcolor: '#F8FAFC', overflow: 'hidden' }}>
-        <Box sx={{ px: 3, pt: 2, pb: 0 }}>
+        {/* ─── Page header with breadcrumbs + project selector ─── */}
+        <Box sx={{
+          px: 3, pt: 2, pb: 1.5, display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', borderBottom: '1px solid #E5E7EB', bgcolor: '#FFFFFF',
+        }}>
           <AppBreadcrumbs />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <FolderIcon sx={{ fontSize: 18, color: headerProjectId ? '#2563EB' : '#9CA3AF' }} />
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel sx={{ fontSize: 13 }}>Select Project</InputLabel>
+              <Select
+                value={headerProjectId}
+                label="Select Project"
+                onChange={(e) => this.onHeaderProjectChange(e.target.value)}
+                sx={{
+                  fontSize: 13, borderRadius: '10px',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: headerProjectId ? '#2563EB' : '#E5E7EB' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#2563EB' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#2563EB' },
+                }}
+              >
+                <MenuItem value="" sx={{ fontSize: 13 }}><em>All Projects</em></MenuItem>
+                {projects.map(p => (
+                  <MenuItem key={p.id} value={p.id} sx={{ fontSize: 13 }}>{p.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
         </Box>
         <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {/* ─── Sidebar ─── */}
@@ -1111,7 +1150,14 @@ class AiDrafting extends React.Component {
           <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <DocIcon sx={{ color: '#2563EB' }} />
-              <Typography sx={{ fontWeight: 700, fontSize: 17 }}>Select Letter & Project</Typography>
+              <Box>
+                <Typography sx={{ fontWeight: 700, fontSize: 17 }}>Attach Letter</Typography>
+                {headerProjectId && (
+                  <Typography sx={{ fontSize: 11, color: '#6B7280', mt: 0.25 }}>
+                    Project: <strong>{projects.find(p => p.id === headerProjectId)?.name || ''}</strong>
+                  </Typography>
+                )}
+              </Box>
             </Box>
             <IconButton size="small" onClick={this.closeLetterPicker} sx={{ color: '#6B7280' }}>
               <CloseIcon sx={{ fontSize: 18 }} />
@@ -1130,19 +1176,6 @@ class AiDrafting extends React.Component {
           <DialogContent sx={{ pt: 2, pb: 2, minHeight: 320 }}>
             {pickerTab === 'select' ? (
               <Box>
-                <TextField
-                  select
-                  size="small"
-                  fullWidth
-                  label="Project"
-                  value={pickerProjectId}
-                  onChange={(e) => this.setState({ pickerProjectId: e.target.value })}
-                  SelectProps={{ native: true }}
-                  sx={{ mb: 2, '& .MuiInputBase-root': { fontSize: 13.5, borderRadius: '10px' } }}
-                >
-                  <option value="">All Projects</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </TextField>
                 <TextField
                   size="small"
                   fullWidth
@@ -1196,19 +1229,6 @@ class AiDrafting extends React.Component {
               </Box>
             ) : (
               <Box>
-                <TextField
-                  select
-                  size="small"
-                  fullWidth
-                  label="Project Scope"
-                  value={pickerUploadProjectId}
-                  onChange={(e) => this.setState({ pickerUploadProjectId: e.target.value })}
-                  SelectProps={{ native: true }}
-                  sx={{ mb: 2, '& .MuiInputBase-root': { fontSize: 13.5, borderRadius: '10px' } }}
-                >
-                  <option value="">All Projects / Global</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </TextField>
                 <Box
                   onClick={() => this.fileInputRef.current?.click()}
                   onDragOver={(e) => e.preventDefault()}

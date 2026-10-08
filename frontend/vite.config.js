@@ -33,31 +33,31 @@ export default defineConfig(({ mode }) => {
       allowedHosts: ['erm-stag.systra.info'],
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
         '/common': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
         '/verifyDbConnection': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
         '/health': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
         '/email': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
         '/file': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
         '/metrics': {
-          target: 'http://127.0.0.1:8001',
+          target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
       },
