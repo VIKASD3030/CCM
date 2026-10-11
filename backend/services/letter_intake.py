@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import get_settings
 from backend.models.letter import InboundLetter
 from backend.models.audit import AuditEntry
-from backend.services.knowledge_base import extract_text_from_bytes
+from backend.services.knowledge_base import extract_document_from_bytes, CONTENT_TYPES
+from backend.services.storage import storage_backend
+from backend.services import correspondence
 from backend.services.webhook_service import dispatch_event
 from backend.services import openai_client
 
@@ -34,6 +36,11 @@ Extract the following information and return ONLY a valid JSON object (no markdo
     "category": "<one of: dispute, renewal_request, amendment, general_inquiry, complaint, payment_issue>",
     "intent": "<1-2 sentence summary of what the client is requesting or communicating>",
     "urgency": "<one of: low, medium, high>",
+    "domain_category": "<one of: extension_of_time, payment, variation, key_date, design_drawings, site_access_land, quality, safety, claims_disputes, termination, general_correspondence, other>",
+    "posture": "<the sender's stance, one of: dispute, request, notice, response, information, acknowledgement>",
+    "scope": "<part of the works concerned, one of: viaduct, stations, depot, systems, both, general, other>",
+    "kd_tags": ["<contract key dates the letter is about, written KD-<number>, e.g. KD-2; empty list if none>"],
+    "requested_action": "<one sentence: what the sender wants us to do, or null if nothing>",
     "confidence_score": <float between 0.0 and 1.0 indicating your confidence in the classification>,
     "key_entities": {{
         "names": ["<list of people/company names mentioned>"],
@@ -60,8 +67,32 @@ Return ONLY a JSON object:
 {{
     "predicted_project_id": "<project_id or null if unsure>",
     "confidence": <float 0.0-1.0>,
-    "reason": "<brief reason for the prediction>"
+    "reason": "<one sentence naming the evidence: contract number, project name, client, location or reference numbering>"
 }}"""
+
+
+ROUTE_AUTO_ASSIGN_CONFIDENCE = 0.85
+
+
+def route_by_keywords(letter_text: str, projects: list[dict]) -> dict | None:
+    """Deterministic project routing: the letter names exactly one project's
+    code or name. Returns {project_id, confidence, reason} or None."""
+    text_ = " ".join((letter_text or "").lower().split())
+    hits: list[tuple[dict, str, str]] = []
+    for p in projects or []:
+        for kind, value in (("project code", p.get("project_code")), ("project name", p.get("name"))):
+            v = " ".join((value or "").lower().split())
+            if len(v) >= 4 and v in text_:
+                hits.append((p, kind, value))
+                break
+    if len({h[0]["id"] for h in hits}) != 1:
+        return None
+    p, kind, value = hits[0]
+    return {
+        "project_id": p["id"],
+        "confidence": 0.9,
+        "reason": f"The letter mentions the {kind} \"{value}\".",
+    }
 
 
 async def classify_letter(
@@ -98,11 +129,26 @@ async def classify_letter(
         if classification.get("urgency") not in valid_urgency:
             classification["urgency"] = "medium"
 
+        valid_posture = ["dispute", "request", "notice", "response", "information", "acknowledgement"]
+        if classification.get("posture") not in valid_posture:
+            classification["posture"] = None
+        valid_scope = ["viaduct", "stations", "depot", "systems", "both", "general", "other"]
+        if classification.get("scope") not in valid_scope:
+            classification["scope"] = None
+        # KD tags: the model's list plus anything the text states explicitly.
+        tags = [t for t in (classification.get("kd_tags") or []) if isinstance(t, str)]
+        classification["kd_tags"] = list(dict.fromkeys(
+            [t.upper().replace(" ", "-") for t in tags] + correspondence.extract_kd_tags(letter_text)
+        ))
+
         # Project prediction
         if projects:
             try:
                 projects_list_str = "\n".join(
-                    f"- {p['id']}: {p['name']}" for p in projects
+                    f"- {p['id']}: {p['name']}"
+                    + (f" (client: {p['client_name']})" if p.get("client_name") else "")
+                    + (f" (code: {p['project_code']})" if p.get("project_code") else "")
+                    for p in projects
                 )
                 pred_text = await openai_client.call_openai_async(
                     prompt=PROJECT_PREDICTION_PROMPT.format(
@@ -155,8 +201,16 @@ async def intake_letter(
     before that finishes, `drafting.generate_draft()` classifies inline (~1-2s)
     instead. See `classify_letter_task` / `reclassify_letter` for that logic.
     """
-    # Extract text — local parsing (pymupdf/docx), no network call, stays fast.
-    raw_text = await extract_text_from_bytes(content, file_type, filename)
+    # Extract text. Digital files parse locally and fast; scanned pages are read
+    # with OCR (a few seconds a page). Page counts and the OCR count are kept.
+    extracted = await extract_document_from_bytes(content, file_type, filename)
+    raw_text = extracted.text
+    meta = correspondence.extract_metadata(raw_text, filename)
+
+    # Keep the original file: the scan itself carries the letterhead, stamps and
+    # signature that the extracted text leaves out.
+    storage_key = f"letters/{uuid.uuid4()}/{filename}"
+    await storage_backend.upload(content, storage_key, CONTENT_TYPES.get(file_type, "application/octet-stream"))
 
     # Create letter record, unclassified for now.
     letter = InboundLetter(
@@ -165,6 +219,15 @@ async def intake_letter(
         status="new",
         project_id=project_id,
         created_by=user_id,
+        storage_path=storage_key,
+        file_type=file_type,
+        page_count=extracted.page_count,
+        ocr_pages=extracted.ocr_pages,
+        ref_no=meta["ref_no"],
+        letter_date=meta["doc_date"],
+        subject=meta["subject"],
+        referenced_refs=meta["referenced_refs"],
+        kd_tags=meta["kd_tags"],
     )
     db.add(letter)
     await db.flush()
@@ -175,7 +238,7 @@ async def intake_letter(
         entity_id=str(letter.id),
         action="uploaded",
         user_id=user_id,
-        details={"filename": filename},
+        details={"filename": filename, "ref_no": meta["ref_no"], "ocr_pages": extracted.ocr_pages},
     )
     db.add(audit)
     await db.flush()
@@ -286,3 +349,20 @@ async def reclassify_letter(
     await db.flush()
 
     return letter.to_dict()
+
+
+def apply_classification(letter: InboundLetter, classification: dict) -> None:
+    """Copy a classify_letter() result onto the letter record."""
+    letter.category = classification.get("category")
+    letter.urgency = classification.get("urgency")
+    letter.intent = classification.get("intent")
+    letter.confidence_score = classification.get("confidence_score")
+    letter.key_entities = classification.get("key_entities")
+    letter.domain_category = classification.get("domain_category")
+    letter.posture = classification.get("posture")
+    letter.scope = classification.get("scope")
+    letter.requested_action = classification.get("requested_action")
+    tags = classification.get("kd_tags") or []
+    letter.kd_tags = list(dict.fromkeys([*(letter.kd_tags or []), *tags]))
+    if letter.status == "new":
+        letter.status = "classified"

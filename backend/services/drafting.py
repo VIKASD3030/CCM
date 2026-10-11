@@ -19,7 +19,15 @@ from backend.config import get_settings
 from backend.models.letter import InboundLetter
 from backend.models.draft import DraftResponse
 from backend.models.audit import AuditEntry
-from backend.services.knowledge_base import search_similar_chunks
+from backend.models.project import Project
+from backend.models.document import DocumentChunk
+from backend.services.correspondence import norm_ref, refs_match
+from backend.services.knowledge_base import (
+    CLAUSE_REF_RE,
+    fetch_clause_chunks,
+    generate_embeddings,
+    search_hybrid,
+)
 from backend.services.webhook_service import dispatch_event
 from backend.services import openai_client
 
@@ -364,8 +372,8 @@ CLIENT'S LETTER:
 ---
 
 CLIENT'S INTENT: {intent}
-
-RELEVANT CONTEXT FROM OUR RECORDS:
+{letter_meta}{project_brief}
+SOURCES FROM THIS PROJECT'S RECORDS (cite them by id: C = contract volume, O = our outgoing letter, I = incoming letter):
 ---
 {context}
 ---
@@ -390,15 +398,221 @@ Return a JSON object with EXACTLY these keys:
     "<paragraph 2..n — address each point raised, citing clauses / dates / figures>",
     "<final paragraph — clear statement of next steps / what SYSTRA will do or needs>"
   ],
-  "enclosures": ["<enclosure name>", "..."]
+  "enclosures": ["<enclosure name>", "..."],
+  "clauses_cited": [
+    {{"clause": "<clause number as written in the source, e.g. 20.1>", "source_id": "<C1, C2, ...>", "quote": "<short exact quote (5-25 words) copied from that source>"}}
+  ]
 }}
 
 Rules for the JSON:
+- Cite a contract clause only if it appears in the SOURCES. Every clause named in the body must have an entry in "clauses_cited" with an exact quote from that source. Never invent clause numbers.
+- If the sources do not cover a point, say what information is needed instead of guessing.
+- Do not contradict what our earlier outgoing letters (O sources) already told the recipient.
+- Sources marked "prior reply" already answer this letter and sources marked "quoted" are earlier letters this one refers to: stay consistent with them and refer to them by their reference number.
+- Clause numbers repeat across documents. Cite a clause together with its document. If two sources conflict, Particular Conditions, Addenda and Amendments override the General Conditions.
 - "body_paragraphs": 3 to 6 items, each a complete paragraph of plain prose (no bullet characters, no markdown, no numbering).
 - Do NOT include any salutation ("Respected Sir"), the opening pleasantry, the closing ("With highest regards" etc.) or the signatory — the template adds those.
 - Use null for any recipient / project / ref field you cannot determine from the source; do not invent names or numbers.
 - If there are no enclosures, use an empty array [].
 - Output valid JSON only, no commentary."""
+
+
+# How many chunks each project folder may contribute, so one folder can't push
+# the others out of the context (label prefix, top_k).
+FOLDER_QUOTAS = (
+    ("contract_volume", "C", 6),
+    ("outgoing_letter", "O", 4),
+    ("incoming_letter", "I", 3),
+)
+
+
+def _snippet(text: str, limit: int = 280) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+BOOST_PER_HIT = 0.08
+MAX_BOOST = 0.24
+
+
+def _boost(chunk: dict, kd_tags: list[str], quoted_refs: list[str]) -> float:
+    """Reward chunks that mention what the letter is about: its key dates
+    (KD-2) and the references it quotes."""
+    text_ = chunk.get("chunk_text", "")
+    hits = 0
+    for tag in kd_tags:
+        n = tag.split("-")[-1]
+        if re.search(rf"\bKD[\s\-]?0?{re.escape(n)}\b", text_, re.IGNORECASE):
+            hits += 1
+    norm_text = norm_ref(text_)
+    for ref in quoted_refs:
+        n = norm_ref(ref)
+        if len(n) >= 8 and n in norm_text:
+            hits += 1
+    return min(MAX_BOOST, hits * BOOST_PER_HIT)
+
+
+async def _thread_sources(db: AsyncSession, letter) -> list[dict]:
+    """The start of each document in the letter's thread: our reply that already
+    answers it, and the letters it quotes."""
+    if letter is None or not letter.project_id:
+        return []
+    from backend.services import threads
+
+    thread = await threads.get_thread(db, letter)
+    picks = [(d, "prior reply") for d in thread["answered_by"][:2]] + [(d, "quoted") for d in thread["quoted"][:3]]
+    out: list[dict] = []
+    for d, basis in picks:
+        row = (await db.execute(
+            select(DocumentChunk).where(DocumentChunk.document_id == d["id"]).order_by(DocumentChunk.chunk_index).limit(1)
+        )).scalar_one_or_none()
+        if not row:
+            continue
+        out.append({
+            "chunk_id": str(row.id),
+            "document_id": d["id"],
+            "chunk_text": row.chunk_text,
+            "chunk_index": row.chunk_index,
+            "clause_no": None,
+            "page_from": row.page_from,
+            "page_to": row.page_to,
+            "document_type": d["document_type"],
+            "filename": d["filename"],
+            "volume_label": None,
+            "ref_no": d["ref_no"],
+            "doc_date": d["doc_date"],
+            "similarity": 1.0,
+            "score": 1.0,
+            "basis": basis,
+            "metadata": {},
+        })
+    return out
+
+
+async def retrieve_project_sources(db: AsyncSession, project_id: str, letter_text: str, letter=None) -> list[dict]:
+    """Sources for a draft, all from one project.
+
+    1. Clauses the letter names ("Clause 20.1") are fetched exactly -> basis "cited".
+    2. The letter's thread: the reply that already answers it and the letters it
+       quotes (matched by reference number) -> basis "prior reply" / "quoted".
+    3. Each folder is searched on its own quota with hybrid ranking (vector +
+       keyword), boosted by the letter's key dates and quoted references
+       -> basis "relevant". Works on keywords alone when embeddings are down.
+    Every chunk gets a citation label: C1.. contract, O1.. outgoing, I1.. incoming.
+    """
+    query_text = (letter_text or "")[:6000]
+    named_clauses = list(dict.fromkeys(CLAUSE_REF_RE.findall(query_text)))
+    exact = await fetch_clause_chunks(db, project_id, named_clauses, limit=4, query_text=query_text)
+    for c in exact:
+        c["basis"] = "cited"
+
+    thread = await _thread_sources(db, letter)
+
+    embeddings = await generate_embeddings([query_text]) if query_text.strip() else []
+    query_vec = embeddings[0] if embeddings and embeddings[0] is not None else None
+    use_vector = query_vec is not None
+
+    own_ref = getattr(letter, "ref_no", None)
+    kd_tags = list(getattr(letter, "kd_tags", None) or [])
+    quoted_refs = list(getattr(letter, "referenced_refs", None) or [])
+
+    seen = {c["chunk_id"] for c in [*exact, *thread]}
+    by_folder: dict[str, list[dict]] = {t: [] for t, _, _ in FOLDER_QUOTAS}
+    by_folder["contract_volume"].extend(exact)
+    for c in thread:
+        by_folder.setdefault(c["document_type"], []).append(c)
+
+    async def ranked(document_type: str | None, top_k: int) -> list[dict]:
+        hits = await search_hybrid(
+            db, query_text, top_k=top_k * 2, project_id=project_id,
+            document_type=document_type, query_vec=query_vec, use_vector=use_vector,
+        )
+        out = []
+        for h in hits:
+            if h["chunk_id"] in seen:
+                continue
+            if own_ref and refs_match(h.get("ref_no"), own_ref):
+                continue  # the letter's own filed copy is not a source for its reply
+            h["score"] = round(h["score"] + _boost(h, kd_tags, quoted_refs), 4)
+            h["basis"] = "relevant"
+            out.append(h)
+        return sorted(out, key=lambda h: h["score"], reverse=True)
+
+    for document_type, _, top_k in FOLDER_QUOTAS:
+        for h in (await ranked(document_type, top_k))[:top_k]:
+            seen.add(h["chunk_id"])
+            by_folder[document_type].append(h)
+
+    # Documents filed before project folders existed: a couple of extra chunks.
+    for h in [h for h in await ranked(None, 6) if not h.get("document_type")][:2]:
+        seen.add(h["chunk_id"])
+        by_folder["contract_volume"].append(h)
+
+    labelled: list[dict] = []
+    for document_type, prefix, _ in FOLDER_QUOTAS:
+        for i, chunk in enumerate(by_folder.get(document_type, []), 1):
+            labelled.append({**chunk, "label": f"{prefix}{i}"})
+    return labelled
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
+def verify_draft(letter_data: dict, clauses_cited, sources: list[dict]) -> dict:
+    """Check the draft against its sources, in code (no LLM).
+
+    - every cited quote must appear in the source it names
+    - every clause number in the body must exist in the sources
+    """
+    by_label = {s["label"]: s for s in sources}
+    source_clauses = {s.get("clause_no") for s in sources if s.get("clause_no")}
+    for s in sources:
+        source_clauses.update(CLAUSE_REF_RE.findall(s.get("chunk_text", "")))
+
+    checks: list[dict] = []
+    cited_ok: list[dict] = []
+    for item in clauses_cited if isinstance(clauses_cited, list) else []:
+        if not isinstance(item, dict):
+            continue
+        clause = str(item.get("clause") or "").strip()
+        label = str(item.get("source_id") or "").strip()
+        quote = _norm(item.get("quote") or "")
+        src = by_label.get(label)
+        found = bool(src and quote and len(quote) >= 8 and quote in _norm(src.get("chunk_text", "")))
+        cited_ok.append({"clause": clause, "source_id": label, "found": found})
+        checks.append({
+            "label": f"Clause {clause} quote found in {label}" if found else f"Clause {clause} quote not found in {label or 'any source'}",
+            "ok": found,
+        })
+
+    body = " ".join(letter_data.get("body") or [])
+    body_clauses = list(dict.fromkeys(CLAUSE_REF_RE.findall(body)))
+    unverified = [c for c in body_clauses if c not in source_clauses]
+    for c in unverified:
+        checks.append({"label": f"Clause {c} is not in this project's sources", "ok": False})
+    if body_clauses and not unverified:
+        checks.append({"label": f"All {len(body_clauses)} clause reference(s) exist in sources", "ok": True})
+    # The same clause number in several documents is a classic mix-up: say which one was used.
+    for c in body_clauses:
+        for src in sources:
+            if src.get("clause_no") == c and src.get("also_in"):
+                checks.append({
+                    "label": f"Clause {c} also exists in {', '.join(src['also_in'][:2])}. Cited from {src.get('filename')}; check this is the intended document.",
+                    "ok": False,
+                })
+                break
+
+    if not sources:
+        checks.append({"label": "No project records found. Upload contract volumes and letters.", "ok": False})
+
+    return {
+        "checks": checks,
+        "unverified_clauses": unverified,
+        "clauses_cited": cited_ok,
+        "issues": sum(1 for c in checks if not c["ok"]),
+        "source_count": len(sources),
+    }
 
 
 async def generate_draft(
@@ -424,37 +638,59 @@ async def generate_draft(
         # background so the upload response is instant). If it hasn't finished
         # by the time a draft is requested, classify here instead — one LLM
         # call, ~1-2s — so category-specific drafting instructions still apply.
-        from backend.services.letter_intake import classify_letter
+        from backend.services.letter_intake import apply_classification, classify_letter
         classification = await classify_letter(letter.raw_text)
-        letter.category = classification.get("category")
-        letter.urgency = classification.get("urgency")
-        letter.intent = classification.get("intent")
-        letter.confidence_score = classification.get("confidence_score")
-        letter.key_entities = classification.get("key_entities")
-        if letter.status == "new":
-            letter.status = "classified"
+        apply_classification(letter, classification)
         await db.flush()
         logger.info("draft.classified_inline", letter_id=str(letter_id))
 
-    relevant_chunks = await search_similar_chunks(
-        db, letter.raw_text, top_k=5, project_id=str(letter.project_id) if letter.project_id else None
-    )
+    if not letter.project_id:
+        # Without a project, retrieval would search every project's records
+        # and could cite another contract. The inbox asks the user to assign one.
+        raise ValueError("This letter has no project. Assign a project before drafting.")
+
+    project = await db.get(Project, letter.project_id)
+    relevant_chunks = await retrieve_project_sources(db, str(letter.project_id), letter.raw_text, letter=letter)
 
     context_parts = []
     context_doc_ids = []
-    for i, chunk in enumerate(relevant_chunks, 1):
-        source = chunk.get("metadata", {}).get("filename", "Unknown")
-        context_parts.append(
-            f"[Document {i}: {source} | Relevance: {chunk['similarity']}]\n{chunk['chunk_text']}"
-        )
+    for chunk in relevant_chunks:
+        source = chunk.get("filename") or chunk.get("metadata", {}).get("filename", "Unknown")
+        header = [source]
+        if chunk.get("volume_label"):
+            header.append(chunk["volume_label"])
+        if chunk.get("ref_no"):
+            header.append(f"Ref {chunk['ref_no']}")
+        if chunk.get("clause_no"):
+            header.append(f"Clause {chunk['clause_no']}")
+        if chunk.get("page_from"):
+            header.append(f"p.{chunk['page_from']}")
+        if chunk.get("basis") in ("prior reply", "quoted"):
+            header.append(chunk["basis"])
+        context_parts.append(f"[{chunk['label']}: {' | '.join(header)}]\n{chunk['chunk_text']}")
         context_doc_ids.append({
+            "label": chunk["label"],
             "document_id": chunk["document_id"],
             "chunk_id": chunk["chunk_id"],
             "similarity": chunk["similarity"],
             "source": source,
+            "document_type": chunk.get("document_type"),
+            "clause_no": chunk.get("clause_no"),
+            "exact": bool(chunk.get("exact")),
+            "basis": chunk.get("basis", "relevant"),
+            "score": chunk.get("score"),
+            "page_from": chunk.get("page_from"),
+            "page_to": chunk.get("page_to"),
+            "volume_label": chunk.get("volume_label"),
+            "ref_no": chunk.get("ref_no"),
+            "doc_date": chunk.get("doc_date"),
+            "also_in": chunk.get("also_in") or [],
+            "snippet": _snippet(chunk["chunk_text"]),
         })
 
-    context_text = "\n\n".join(context_parts) if context_parts else "No relevant context found in the knowledge base."
+    context_text = "\n\n".join(context_parts) if context_parts else "No records found for this project."
+    brief = ((project.project_metadata or {}).get("brief") or "").strip() if project else ""
+    project_brief = f"\nPROJECT BRIEF (verified facts about this project):\n---\n{brief}\n---\n" if brief else ""
 
     category_instructions = CATEGORY_INSTRUCTIONS.get(
         letter.category or "general_inquiry",
@@ -464,11 +700,22 @@ async def generate_draft(
     ref_no = _generate_ref_no()
     letter_date = _format_long_date(date.today())
 
+    meta_lines = []
+    if letter.ref_no or letter.letter_date:
+        meta_lines.append(f"CLIENT'S REFERENCE: {letter.ref_no or 'not stated'}   DATE OF THEIR LETTER: {letter.letter_date or 'not stated'}")
+    if letter.kd_tags:
+        meta_lines.append(f"KEY DATES CONCERNED: {', '.join(letter.kd_tags)}")
+    if letter.requested_action:
+        meta_lines.append(f"WHAT THE CLIENT ASKS FOR: {letter.requested_action}")
+    letter_meta = ("\n".join(meta_lines) + "\n") if meta_lines else ""
+
     prompt = DRAFTING_PROMPT.format(
         category=letter.category or "general_inquiry",
         urgency=letter.urgency or "medium",
         letter_text=letter.raw_text,
         intent=letter.intent or "Not classified",
+        letter_meta=letter_meta,
+        project_brief=project_brief,
         context=context_text,
         category_instructions=category_instructions,
         additional_instructions=f"\nADDITIONAL INSTRUCTIONS:\n{additional_instructions}" if additional_instructions else "",
@@ -478,7 +725,7 @@ async def generate_draft(
         raw = await openai_client.call_openai_async(
             prompt=f"{DRAFTING_SYSTEM_PROMPT}\n\n{prompt}",
             model=draft_model,
-            temperature=0.6,
+            temperature=0.3,
             max_output_tokens=3000,
             response_format={"type": "json_object"},
         )
@@ -497,6 +744,7 @@ async def generate_draft(
     # Deterministic assembly: LLM supplies only body fields; branding, ref no.,
     # date, salutation, signatory and layout all come from fixed config.
     letter_data = build_letter_data(fields, ref_no=ref_no, letter_date=letter_date)
+    letter_data["verification"] = verify_draft(letter_data, fields.get("clauses_cited"), relevant_chunks)
     draft_text = render_systra_letter(letter_data)
 
     version_count = await db.execute(
@@ -510,6 +758,7 @@ async def generate_draft(
     draft = DraftResponse(
         id=draft_id,
         letter_id=str(letter_id),
+        project_id=letter.project_id,
         draft_text=draft_text,
         letter_data=letter_data,
         version=version,

@@ -1,360 +1,146 @@
 /**
- * Dashboard — Enterprise redesign using MUI + our design system tokens.
+ * Dashboard — Figma frame 02. KPI row, letters that need a reply, the review
+ * queue and how well each project's folders are filled.
  */
 import React from 'react';
-import { motion } from 'framer-motion';
-import {
-  Card, CardContent, Box, Stack, Typography, Select, MenuItem, Button, Chip, Skeleton,
-} from '@mui/material';
-import {
-  Inbox as InboxIcon,
-  Edit as EditIcon,
-  Schedule as ScheduleIcon,
-  MenuBook as MenuBookIcon,
-  MailOutlined as MailIcon,
-  CheckCircle as CheckIcon,
-  Send as SendIcon,
-  FolderOpen as FolderIcon,
-  ArrowForward as ArrowIcon,
-  Sync as SyncIcon,
-} from '@mui/icons-material';
 import CCM from '../ccm-api';
-import PageContainer from '../../components/ui/PageContainer';
-import PageHeader from '../../components/ui/PageHeader';
-import AppBreadcrumbs from '../../components/ui/Breadcrumbs';
+import {
+  PageTop, Btn, Card, Chip, Kpi, FlagChip, Empty, Skeleton, ProgressBar, go, ROUTES,
+  isOpenLetter, URGENCY_RANK, urgencyTone, letterRef, letterSubject, timeAgo, cap, FOLDERS,
+} from '../ui/kit';
+import { UploadLetterModal } from '../ui/modals';
 
-const metricIcons = {
-  total: InboxIcon,
-  drafts: EditIcon,
-  pending: ScheduleIcon,
-  kb: MenuBookIcon,
-};
+export default function Dashboard() {
+  const [data, setData] = React.useState(null);
+  const [error, setError] = React.useState(null);
+  const [uploading, setUploading] = React.useState(false);
 
-const metricColors = {
-  total: { color: '#1E3A8A', bg: '#EFF6FF' },
-  drafts: { color: '#7C3AED', bg: '#F5F3FF' },
-  pending: { color: '#D97706', bg: '#FFFBEB' },
-  kb: { color: '#059669', bg: '#ECFDF5' },
-};
-
-const metricLabels = {
-  total: 'Total Letters',
-  drafts: 'Drafts Generated',
-  pending: 'Pending Review',
-  kb: 'KB Documents',
-};
-
-const pipelineColors = ['#1E3A8A', '#2563EB', '#7C3AED', '#059669', '#0EA5E9'];
-
-const statusColors = {
-  received: '#3B82F6',
-  classified: '#8B5CF6',
-  drafted: '#7C3AED',
-  approved: '#22C55E',
-  sent: '#0EA5E9',
-  rejected: '#EF4444',
-  pending: '#F59E0B',
-};
-
-class Dashboard extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      loading: true,
-      error: false,
-      projects: [],
-      currentProjectId: '',
-      metrics: { total: 0, drafts: 0, pending: 0, kb: 0 },
-      pipeline: [],
-      letters: [],
-      sync: [],
-      activity: [],
-    };
-  }
-
-  componentDidMount() {
-    this.loadAll();
-  }
-
-  async loadProjects() {
+  const load = React.useCallback(async () => {
     try {
-      const data = await CCM.projects.list();
-      const projects = data.projects || [];
-      this.setState({ projects });
-      return projects;
-    } catch {
-      this.setState({ projects: [] });
-      return [];
-    }
-  }
-
-  loadAll = async () => {
-    this.setState({ loading: true, error: false });
-    const projects = await this.loadProjects();
-    const { currentProjectId } = this.state;
-    const isMasterProject = currentProjectId && String(currentProjectId).startsWith('master-');
-
-    try {
-      const statsPromise = isMasterProject
-        ? Promise.resolve({ total_letters: 0, total_drafts: 0, pending_review: 0, letters_by_status: {}, drafts_by_status: {}, recent_activity: [] })
-        : CCM.review.dashboardStats();
-      const kbStatsPromise = isMasterProject
-        ? Promise.resolve({ total_documents: 0 })
-        : CCM.knowledge.stats();
-
-      const [stats, kbStats] = await Promise.all([statsPromise, kbStatsPromise]);
-
-      const metrics = {
-        total: stats.total_letters || 0,
-        drafts: stats.total_drafts || 0,
-        pending: stats.pending_review || 0,
-        kb: kbStats.total_documents || 0,
-      };
-
-      const pipeline = [
-        { label: 'Received', count: stats.total_letters || 0 },
-        { label: 'Classified', count: (stats.letters_by_status && stats.letters_by_status.classified) || 0 },
-        { label: 'Drafted', count: stats.total_drafts || 0 },
-        { label: 'Approved', count: (stats.drafts_by_status && stats.drafts_by_status.approved) || 0 },
-        { label: 'Sent', count: (stats.letters_by_status && stats.letters_by_status.sent) || 0 },
-      ];
-
-      const lettersRes = isMasterProject
-        ? { letters: [] }
-        : await CCM.letters.list();
-      const letters = (lettersRes.letters || []).slice(0, 5);
-
-      let sync = [];
-      if (projects.length) {
-        const syncData = await Promise.all(projects.map(p => {
-          if (String(p.id).startsWith('master-')) return Promise.resolve(null);
-          return CCM.projects.stats(p.id).catch(() => null);
-        }));
-        sync = projects.map((p, i) => ({ project: p, stats: syncData[i] }));
-      }
-
-      const activity = (stats.recent_activity || []).slice(0, 5);
-
-      this.setState({ loading: false, metrics, pipeline, letters, sync, activity });
+      const [stats, letters, projects, queue] = await Promise.all([
+        CCM.review.dashboardStats(),
+        CCM.letters.list(null, null, null, 200),
+        CCM.projects.list(),
+        CCM.review.queue(),
+      ]);
+      setData({ stats, letters: letters.letters || [], projects: projects.projects || [], queue: queue.items || [] });
+      setError(null);
     } catch (e) {
-      console.error('Dashboard error:', e);
-      this.setState({ loading: false, error: true });
+      setError(e.message);
     }
-  };
+  }, []);
 
-  setProject = (e) => {
-    const projectId = e.target.value;
-    this.setState({ currentProjectId: projectId }, () => this.loadAll());
-  };
+  React.useEffect(() => { load(); }, [load]);
 
-  fmtDate(d) {
-    return d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
-  }
+  const projectName = (id) => data?.projects.find((p) => p.id === id)?.name;
 
-  render() {
-    const { loading, error, projects, currentProjectId, metrics, pipeline, letters, sync, activity } = this.state;
+  const openLetters = (data?.letters || [])
+    .filter(isOpenLetter)
+    .sort((a, b) => (URGENCY_RANK[(a.urgency || 'low').toLowerCase()] ?? 9) - (URGENCY_RANK[(b.urgency || 'low').toLowerCase()] ?? 9)
+      || new Date(a.received_at) - new Date(b.received_at))
+    .slice(0, 6);
 
-    if (error) {
-      return (
-        <PageContainer>
-          <Card sx={{ textAlign: 'center', py: 8 }}>
-            <CardContent>
-              <Typography variant="h5" sx={{ color: '#111827', fontWeight: 700, mb: 1 }}>Failed to load dashboard</Typography>
-              <Button variant="contained" sx={{ mt: 2, borderRadius: 2, textTransform: 'none' }} onClick={this.loadAll}>Retry</Button>
-            </CardContent>
-          </Card>
-        </PageContainer>
-      );
-    }
+  const s = data?.stats || {};
+  const staleReviews = (data?.queue || []).filter((q) => Date.now() - new Date(q.draft.created_at) > 86400000).length;
+  const ccmProjects = (data?.projects || []).filter((p) => p.source === 'ccm' && p.folders)
+    .sort((a, b) => (b.readiness?.percent || 0) - (a.readiness?.percent || 0)).slice(0, 4);
 
-    const maxPipeline = Math.max(...pipeline.map(s => s.count), 1);
+  return (
+    <>
+      <PageTop crumbs={[{ label: 'Home' }]} title="Dashboard"
+        actions={<Btn variant="primary" onClick={() => setUploading(true)}>Upload letter</Btn>} />
+      <div className="cx-content">
+        {error && <div className="cx-banner bad"><b>Couldn't load the dashboard.</b><span className="cx-s12">{error}</span><span className="cx-spacer" /><Btn size="sm" onClick={load}>Retry</Btn></div>}
 
-    return (
-      <PageContainer>
-        <AppBreadcrumbs />
-        <PageHeader
-          title="Dashboard"
-          subtitle="Overview of your CCM system activity"
-          actions={
-            <Select
-              size="small"
-              value={currentProjectId}
-              onChange={this.setProject}
-              sx={{ minWidth: 200, borderRadius: 2, fontSize: 14, bgcolor: '#fff' }}
-            >
-              <MenuItem value="">All Projects</MenuItem>
-              {projects.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
-            </Select>
-          }
-        />
+        <div className="cx-kpis">
+          {!data ? [0, 1, 2, 3].map((i) => <div className="cx-kpi" key={i}><Skeleton h={12} w="50%" /><Skeleton h={30} w="40%" /><Skeleton h={12} w="60%" /></div>) : (
+            <>
+              <Kpi label="Open letters" value={s.open_letters ?? 0}
+                note={`${s.open_high_urgency || 0} high urgency`} tone={s.open_high_urgency ? 'bad' : 'ok'} />
+              <Kpi label="Drafts awaiting review" value={s.pending_review ?? 0}
+                note={staleReviews ? `${staleReviews} older than 24h` : 'All recent'} tone={staleReviews ? 'warn' : 'ok'} />
+              <Kpi label="Avg. turnaround" value={s.avg_turnaround_days != null ? `${s.avg_turnaround_days} days` : '—'}
+                note={s.avg_turnaround_days != null ? 'From receipt to approval' : 'No approved replies yet'} />
+              <Kpi label="Replies overdue" value={s.overdue_letters ?? 0}
+                note={`Open more than ${s.reply_sla_days || 7} days`} tone={s.overdue_letters ? 'bad' : 'ok'} />
+            </>
+          )}
+        </div>
 
-        {/* Metric cards */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
-          {['total', 'drafts', 'pending', 'kb'].map((key) => {
-            const Icon = metricIcons[key];
-            const { color, bg } = metricColors[key];
-            return (
-              <motion.div key={key} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                <Card sx={{ position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${color}, ${color}88)`, borderRadius: '16px 16px 0 0' } }}>
-                  <CardContent sx={{ p: 2.5 }}>
-                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
-                      <Box>
-                        <Typography variant="overline" sx={{ color: '#9CA3AF', fontWeight: 600, fontSize: 12, letterSpacing: '0.08em' }}>{metricLabels[key]}</Typography>
-                        <Typography variant="h2" sx={{ mt: 0.5, fontSize: 32, fontWeight: 700, color: '#111827' }}>
-                          {loading ? <Skeleton width={60} /> : metrics[key]}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ width: 48, height: 48, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: bg, color, flexShrink: 0 }}>
-                        <Icon sx={{ fontSize: 24 }} />
-                      </Box>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </Box>
-
-        {/* Pipeline */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent sx={{ p: 2.5 }}>
-            <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16, mb: 2 }}>Pipeline</Typography>
-            {loading ? (
-              <Skeleton variant="rounded" height={56} />
+        <div className="cx-row stack-md" style={{ gap: 24, alignItems: 'flex-start' }}>
+          <Card title="Incoming letters needing a reply" className="cx-grow"
+            right={<Btn variant="ghost" onClick={() => go(ROUTES.letters)}>View all</Btn>}>
+            {!data ? <Skeleton h={180} /> : openLetters.length === 0 ? (
+              <Empty title="No letters waiting for a reply"
+                action={<Btn onClick={() => setUploading(true)}>Upload a letter</Btn>}>
+                New client letters appear here until their reply is approved.
+              </Empty>
             ) : (
-              <Box sx={{ display: 'flex', gap: 0 }}>
-                {pipeline.map((s, i) => (
-                  <Box key={s.label} sx={{ flex: 1, textAlign: 'center', position: 'relative' }}>
-                    <Box sx={{ height: Math.max((s.count / maxPipeline) * 52, 4), bgcolor: pipelineColors[i], borderRadius: 1, mx: 0.5, transition: 'height 0.3s ease' }} />
-                    <Typography sx={{ fontSize: 20, fontWeight: 700, color: '#111827', mt: 1 }}>{s.count}</Typography>
-                    <Typography sx={{ fontSize: 12, color: '#9CA3AF', fontWeight: 500 }}>{s.label}</Typography>
-                  </Box>
-                ))}
-              </Box>
+              <div className="cx-table-wrap">
+                <table className="cx-table">
+                  <thead><tr><th>Ref</th><th>Subject</th><th>Project</th><th>Urgency</th><th>Received</th><th /></tr></thead>
+                  <tbody>
+                    {openLetters.map((l) => (
+                      <tr key={l.id} className="clickable" onClick={() => go(ROUTES.drafting(l.id))}>
+                        <td className="cx-s12"><div className="cx-ellipsis" style={{ maxWidth: 110 }} title={letterRef(l)}>{letterRef(l)}</div></td>
+                        <td><div className="cx-ellipsis" style={{ maxWidth: 190 }} title={letterSubject(l)}>{letterSubject(l)}</div></td>
+                        <td>{projectName(l.project_id) ? <div className="cx-ellipsis" style={{ maxWidth: 110 }}>{projectName(l.project_id)}</div> : <Chip tone="warn">Unassigned</Chip>}</td>
+                        <td><Chip tone={urgencyTone(l.urgency)}>{cap(l.urgency || 'Pending')}</Chip></td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{timeAgo(l.received_at)}</td>
+                        <td><Btn size="sm" onClick={(e) => { e.stopPropagation(); go(ROUTES.drafting(l.id)); }}>Draft</Btn></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Grid: Letters / Sync / Activity */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr 1fr' }, gap: 2.5 }}>
-          {/* Recent Letters */}
-          <Card>
-            <CardContent sx={{ p: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 2, borderBottom: '1px solid #F3F4F6' }}>
-                <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16 }}>Recent Letters</Typography>
-                <Button size="small" startIcon={<EditIcon sx={{ fontSize: 14 }} />} onClick={() => { window.location.hash = '/master/ai-drafting'; }} sx={{ textTransform: 'none', fontSize: 12, color: '#2563EB', fontWeight: 600 }}>
-                  Draft
-                </Button>
-              </Box>
-              <Box sx={{ p: 0 }}>
-                {loading ? (
-                  <Stack spacing={0} p={2.5}>
-                    {[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={52} />)}
-                  </Stack>
-                ) : !letters.length ? (
-                  <Box sx={{ py: 5, textAlign: 'center' }}>
-                    <MailIcon sx={{ fontSize: 36, color: '#D1D5DB', mb: 1 }} />
-                    <Typography sx={{ fontSize: 14, color: '#9CA3AF' }}>No letters yet</Typography>
-                  </Box>
-                ) : letters.map(l => (
-                  <Box key={l.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 1.5, borderBottom: '1px solid #F3F4F6', '&:last-child': { borderBottom: 'none' }, '&:hover': { bgcolor: '#F8FAFC' } }}>
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{l.sender || 'Unknown'}</Typography>
-                      <Typography sx={{ fontSize: 13, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.filename || '—'}</Typography>
-                      <Typography sx={{ fontSize: 12, color: '#9CA3AF', mt: 0.25 }}>{this.fmtDate(l.received_at)}</Typography>
-                    </Box>
-                    <Chip
-                      size="small"
-                      label={(l.status || '').replace('_', ' ')}
-                      sx={{ height: 26, fontSize: 12, fontWeight: 600, borderRadius: '999px', bgcolor: `${statusColors[l.status] || '#3B82F6'}14`, color: statusColors[l.status] || '#3B82F6', border: `1px solid ${statusColors[l.status] || '#3B82F6'}30` }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-            </CardContent>
           </Card>
 
-          {/* Sync Status */}
-          <Card>
-            <CardContent sx={{ p: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 2, borderBottom: '1px solid #F3F4F6' }}>
-                <SyncIcon sx={{ fontSize: 18, color: '#6B7280' }} />
-                <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16 }}>Sync Status</Typography>
-              </Box>
-              <Box sx={{ p: 0 }}>
-                {loading ? (
-                  <Stack spacing={0} p={2.5}>
-                    {[1, 2].map(i => <Skeleton key={i} variant="rounded" height={52} />)}
-                  </Stack>
-                ) : !sync.length ? (
-                  <Box sx={{ py: 5, textAlign: 'center' }}>
-                    <FolderIcon sx={{ fontSize: 36, color: '#D1D5DB', mb: 1 }} />
-                    <Typography sx={{ fontSize: 14, color: '#9CA3AF' }}>No projects configured</Typography>
-                  </Box>
-                ) : sync.map(({ project, stats }) => {
-                  const lastSync = stats?.last_sync;
-                  const ok = lastSync?.status === 'success';
-                  const fail = lastSync?.status === 'failed';
-                  return (
-                    <Box key={project.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, py: 1.5, borderBottom: '1px solid #F3F4F6', '&:last-child': { borderBottom: 'none' } }}>
-                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: ok ? '#22C55E' : fail ? '#EF4444' : '#9CA3AF', flexShrink: 0 }} />
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{project.name}</Typography>
-                        <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
-                          {lastSync?.last_synced_at ? new Date(lastSync.last_synced_at).toLocaleDateString() : 'Never synced'}
-                          {lastSync?.files_synced !== undefined ? ` · ${lastSync.files_synced} files` : ''}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </CardContent>
-          </Card>
+          <div className="cx-col" style={{ width: 380, flex: 'none', gap: 24 }}>
+            <Card title="Awaiting review" right={data?.queue.length ? <Btn variant="ghost" size="sm" onClick={() => go(ROUTES.review())}>Open queue</Btn> : null}>
+              {!data ? <Skeleton h={120} /> : data.queue.length === 0 ? (
+                <span className="cx-s12 cx-muted">Nothing to review right now.</span>
+              ) : data.queue.slice(0, 4).map((q) => (
+                <button key={q.draft.id} type="button" className="cx-qitem" style={{ padding: '4px 0' }} onClick={() => go(ROUTES.review(q.draft.id))}>
+                  <div className="cx-grow">
+                    <div style={{ fontWeight: 500 }}>Reply to {letterRef(q.letter)}</div>
+                    <div className="cx-s12 cx-muted">v{q.draft.version} · {q.project_name || 'No project'}</div>
+                  </div>
+                  <FlagChip issues={q.issues} />
+                </button>
+              ))}
+            </Card>
 
-          {/* Recent Activity */}
-          <Card>
-            <CardContent sx={{ p: 0 }}>
-              <Box sx={{ px: 2.5, py: 2, borderBottom: '1px solid #F3F4F6' }}>
-                <Typography variant="h6" sx={{ color: '#111827', fontWeight: 700, fontSize: 16 }}>Recent Activity</Typography>
-              </Box>
-              <Box sx={{ p: 0 }}>
-                {loading ? (
-                  <Stack spacing={0} p={2.5}>
-                    {[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={48} />)}
-                  </Stack>
-                ) : !activity.length ? (
-                  <Box sx={{ py: 5, textAlign: 'center' }}>
-                    <ScheduleIcon sx={{ fontSize: 36, color: '#D1D5DB', mb: 1 }} />
-                    <Typography sx={{ fontSize: 14, color: '#9CA3AF' }}>No activity yet</Typography>
-                  </Box>
-                ) : activity.map((a, i) => {
-                  const time = a.timestamp ? new Date(a.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-                  let dotColor = '#3B82F6';
-                  if (a.action.includes('draft')) dotColor = '#7C3AED';
-                  if (a.action.includes('approved')) dotColor = '#22C55E';
-                  if (a.action.includes('received')) dotColor = '#F59E0B';
-                  return (
-                    <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, px: 2.5, py: 1.5, borderBottom: '1px solid #F3F4F6', '&:last-child': { borderBottom: 'none' } }}>
-                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor, mt: 0.75, flexShrink: 0 }} />
-                      <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography sx={{ fontSize: 14, fontWeight: 500, color: '#111827', textTransform: 'capitalize' }}>
-                          {a.action.replace(/_/g, ' ')}
-                        </Typography>
-                        <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
-                          {a.entity_type || ''} · {time}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      </PageContainer>
-    );
-  }
+            <Card title="Project knowledge coverage">
+              {!data ? <Skeleton h={140} /> : ccmProjects.length === 0 ? (
+                <Empty title="No project folders yet" action={<Btn onClick={() => go(ROUTES.projects)}>Open projects</Btn>}>
+                  Upload contract volumes and letters to a project.
+                </Empty>
+              ) : ccmProjects.map((p) => (
+                <button key={p.id} type="button" className="cx-qitem" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, padding: '2px 0' }}
+                  onClick={() => go(ROUTES.project(p.id))}>
+                  <span style={{ fontWeight: 500 }}>{p.name}</span>
+                  <span style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                    {FOLDERS.map((f) => {
+                      const n = p.folders[f.key]?.indexed || 0;
+                      return (
+                        <span key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <ProgressBar percent={n > 0 ? 100 : 0} tone="red" />
+                          <span className="cx-s11 cx-muted">{f.short} {n}</span>
+                        </span>
+                      );
+                    })}
+                  </span>
+                </button>
+              ))}
+            </Card>
+          </div>
+        </div>
+      </div>
+      {uploading && (
+        <UploadLetterModal projects={data?.projects || []} onClose={() => setUploading(false)}
+          onUploaded={() => { setUploading(false); load(); }} />
+      )}
+    </>
+  );
 }
-
-export default Dashboard;

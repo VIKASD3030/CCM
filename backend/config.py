@@ -109,6 +109,7 @@ class Settings(BaseSettings):
     azure_tenant_id: Optional[str] = Field(None, description="Azure AD tenant ID")
     azure_client_id: Optional[str] = Field(None, description="Azure AD client ID")
     azure_jwks_url: Optional[str] = Field(None, description="Azure AD JWKS URL override")
+    sharepoint_access_token: Optional[str] = Field(None, description="Microsoft Graph bearer token for SharePoint sync (dev; use client credentials in production)")
 
     # PgBouncer
     use_pgbouncer: bool = Field(True, description="Use PgBouncer")

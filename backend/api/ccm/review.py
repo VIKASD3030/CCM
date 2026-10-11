@@ -86,6 +86,19 @@ async def get_audit_trail(
     return {"audit_entries": entries}
 
 
+@router.get("/queue")
+async def review_queue(
+    status: str = "pending_review",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Drafts waiting for review (or approved / rejected, via `status`)."""
+    if status not in ("pending_review", "approved", "rejected", "sent", "revised"):
+        raise HTTPException(status_code=400, detail="Unknown review status")
+    items = await review_service.get_review_queue(db, status, current_user.id, current_user.role)
+    return {"items": items, "total": len(items)}
+
+
 @router.get("/dashboard/stats")
 async def dashboard_stats(
     current_user: User = Depends(get_current_user),

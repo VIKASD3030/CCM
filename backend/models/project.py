@@ -29,10 +29,19 @@ class Project(Base):
     project_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     def to_dict(self):
+        meta = self.project_metadata or {}
         return {
             "id": str(self.id),
             "name": self.name,
             "sharepoint_site_id": self.sharepoint_site_id,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            # Master-module project this CCM project was created from, if any.
+            "master_id": meta.get("master_id"),
+            "project_code": meta.get("project_code"),
+            "client_name": meta.get("client_name"),
+            # Reviewer-maintained project brief, fed into every draft prompt.
+            "brief": meta.get("brief") or "",
+            "brief_verified": bool(meta.get("brief_verified")),
+            "source": "ccm",
         }

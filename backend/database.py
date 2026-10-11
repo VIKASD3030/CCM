@@ -80,11 +80,57 @@ async def init_db():
         # Idempotent; a matching Alembic migration can carry the same guard.
         for ddl in (
             "ALTER TABLE draft_responses ADD COLUMN IF NOT EXISTS letter_data JSONB",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS document_type VARCHAR(30)",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS clause_count INTEGER DEFAULT 0",
+            "ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS clause_no VARCHAR(40)",
+            "CREATE INDEX IF NOT EXISTS ix_kd_project_type ON knowledge_documents (project_id, document_type)",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS page_count INTEGER",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS ocr_pages INTEGER DEFAULT 0",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS status_detail TEXT",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS checksum VARCHAR(64)",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS ref_no VARCHAR(200)",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS doc_date DATE",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS subject TEXT",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS referenced_refs JSONB",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS volume_label VARCHAR(120)",
+            "ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS page_from INTEGER",
+            "ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS page_to INTEGER",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS domain_category VARCHAR(60)",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS posture VARCHAR(40)",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS scope VARCHAR(60)",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS kd_tags JSONB",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS requested_action TEXT",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS ref_no VARCHAR(200)",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS letter_date DATE",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS subject TEXT",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS referenced_refs JSONB",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS storage_path VARCHAR(500)",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS file_type VARCHAR(20)",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS page_count INTEGER",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS ocr_pages INTEGER DEFAULT 0",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS suggested_project_id UUID REFERENCES projects(id) ON DELETE SET NULL",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS routing_confidence DOUBLE PRECISION",
+            "ALTER TABLE inbound_letters ADD COLUMN IF NOT EXISTS routing_reason TEXT",
+            "CREATE INDEX IF NOT EXISTS ix_kd_project_checksum ON knowledge_documents (project_id, checksum)",
+            "CREATE INDEX IF NOT EXISTS ix_kd_project_ref ON knowledge_documents (project_id, ref_no)",
+            "CREATE INDEX IF NOT EXISTS ix_dc_fts ON document_chunks USING gin (to_tsvector('simple', chunk_text))",
         ):
             try:
                 await conn.exec_driver_sql(ddl)
             except Exception as exc:  # noqa: BLE001 — never block startup on this
                 logger.warning("db.safety_alter_failed", ddl=ddl, error=str(exc))
+
+        # Documents still "processing" after 10 minutes were interrupted (for
+        # example by a server restart while indexing in-process). Mark them
+        # failed so the project folder shows Re-index instead of a spinner forever.
+        try:
+            await conn.exec_driver_sql(
+                "UPDATE knowledge_documents SET status = 'failed', "
+                "status_detail = 'Indexing was interrupted (the server restarted). Use Re-index.' "
+                "WHERE status = 'processing' AND updated_at < now() - interval '10 minutes'"
+            )
+        except Exception as exc:  # noqa: BLE001 — never block startup on this
+            logger.warning("db.stuck_documents_sweep_failed", error=str(exc))
 
         from backend.db_seed import seed_rbac
         await seed_rbac(conn)

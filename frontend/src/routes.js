@@ -4,6 +4,11 @@ const Login = React.lazy(() => import('./authentication/login'));
 
 const CcmDashboard = React.lazy(() => import('./ccm/views/dashboard'));
 const CcmAiDrafting = React.lazy(() => import('./ccm/views/ai-drafting'));
+const CcmProjects = React.lazy(() => import('./ccm/views/projects'));
+const CcmProjectWorkspace = React.lazy(() => import('./ccm/views/project-workspace'));
+const CcmLetters = React.lazy(() => import('./ccm/views/letters'));
+const CcmReviewQueue = React.lazy(() => import('./ccm/views/review-queue'));
+const CcmKnowledgeBase = React.lazy(() => import('./ccm/views/knowledge-base'));
 
 
 const Project = React.lazy(() => import('./master/views/project-master'));
@@ -56,8 +61,15 @@ const ViewUserErrors = React.lazy(() => import('./master/views/view-user-errors'
 const routes = [
 
 
-  { path: '/master/dashboard', name: 'Dashboard', component: CcmDashboard },
-  { path: '/master/ai-drafting', name: 'AI Agent for Contract & Claim Management', component: CcmAiDrafting },
+  // CCM pages render their own header bar (ownTopbar); everything else gets
+  // the shell's generic one with the route name as title.
+  { path: '/master/dashboard', name: 'Dashboard', component: CcmDashboard, ownTopbar: true },
+  { path: '/master/ai-drafting', name: 'AI Drafting', component: CcmAiDrafting, ownTopbar: true },
+  { path: '/ccm/projects', name: 'Projects', component: CcmProjects, ownTopbar: true },
+  { path: '/ccm/project', name: 'Project workspace', component: CcmProjectWorkspace, ownTopbar: true },
+  { path: '/ccm/letters', name: 'Letters', component: CcmLetters, ownTopbar: true },
+  { path: '/ccm/review', name: 'Review queue', component: CcmReviewQueue, ownTopbar: true },
+  { path: '/ccm/knowledge', name: 'Knowledge Base', component: CcmKnowledgeBase, ownTopbar: true },
   { path: '/master/project-master', name: 'Project', component: Project },
   { path: '/master/project-master-details', name: 'Project Details', component: ProjectDetails },
   // { path: '/master/variation-order-master', name: 'Variation Order', component: VariationOrder },

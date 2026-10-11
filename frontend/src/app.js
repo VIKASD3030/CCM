@@ -4,7 +4,6 @@ import { basicReduxStore } from './reduxStore';
 import { authProvider } from './authentication/auth-provider';
 import { isExternalLoginActive, getSession, setSession } from './authentication/cookie'; // Use new helper
 import Login from './authentication/login';
-import LandingPage from './authentication/landing-page';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 // import Sidebar from './components/app/App.jsx';
 import { Preloader } from './components/Preloader';
@@ -21,7 +20,6 @@ class App extends Component {
     this.state = {
       isExternalLogin: isExternalLoginActive(),
       azureExchangeError: null,
-      showLogin: false,
     };
     this._azureExchangeStarted = false;
   }
@@ -95,9 +93,7 @@ class App extends Component {
                     </Suspense>
                   );
                 }
-                return this.state.showLogin
-                  ? <Login />
-                  : <LandingPage onLoginClick={() => this.setState({ showLogin: true })} />;
+                return <Login />;
               } else if (authenticationState === AuthenticationState.Authenticated) {
                 const hasCcmSession = !!getSession('UserId');
                 if (!hasCcmSession) {

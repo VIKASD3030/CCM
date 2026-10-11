@@ -3,30 +3,15 @@ import './login.css';
 import { AzureAD, LoginType, AuthenticationState } from 'react-aad-msal';
 import { basicReduxStore } from '../reduxStore';
 import { setSession, setNewSession } from './cookie';
-import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import LoginState from './loginState';
 import PrivateRoute from '../private-route';
 import ExternalDashboard from '../external-dashboard';
 import { authProvider } from './auth-provider';
 import CommonUtilityController from '../master/controller/common-utility-controller';
 import config from '../config/config';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Button from '@mui/material/Button';
-import TextField from '@mui/material/TextField';
-import Stack from '@mui/material/Stack';
-import CircularProgress from '@mui/material/CircularProgress';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
-import Typography from '@mui/material/Typography';
-import Tooltip from '@mui/material/Tooltip';
-import Box from '@mui/material/Box';
-import InputAdornment from '@mui/material/InputAdornment';
+import '../ccm/ui/ccm-ui.css';
 import { jwtDecode } from 'jwt-decode';
 
 class Login extends React.Component {
@@ -166,10 +151,6 @@ class Login extends React.Component {
     }
   };
 
-  externalLogin = () => {
-    this.setState({ visible: true, loading: false });
-  }
-
   // ===== TEMPORARY DEV-ONLY BYPASS — REMOVE THIS METHOD =====
   // Logs straight in as vdwivedi2@systra.info via backend POST /api/auth/dev-login,
   // skipping the Microsoft popup entirely. To revert: change the "Login" button's
@@ -230,10 +211,6 @@ class Login extends React.Component {
       });
   }
 
-  toggleModal = () => {
-    this.setState(prev => ({ loginValues: { UserName: '', Password: '' }, loginErrors: {}, visible: !prev.visible }));
-  }
-
   async saveUserLogDetails(userLogs) {
     this.setState({ loading: true });
     await new CommonUtilityController().saveUserLogDetails(userLogs)
@@ -246,7 +223,7 @@ class Login extends React.Component {
   }
 
   render() {
-    let { loginEnabled, visible, isExternalLogin, loading, loginValues, loginErrors, snackbar } = this.state;
+    let { loginEnabled, isExternalLogin, loading, loginValues, loginErrors, snackbar, otp } = this.state;
 
     if (isExternalLogin) {
       return (
@@ -257,98 +234,80 @@ class Login extends React.Component {
         </div>
       )
     }
-    else {
-      return (
-        <div>
-          <AzureAD provider={authProvider} reduxStore={basicReduxStore}>
-            {({ login, authenticationState }) => {
-              const isInProgress = authenticationState === AuthenticationState.InProgress;
-              const isUnauthenticated = authenticationState === AuthenticationState.Unauthenticated;
 
-              if (isUnauthenticated || isInProgress) {
-                return (
-                  <div>
-                    <div
-                      className="login-page-container"
-                      style={{ backgroundImage: `url(${import.meta.env.BASE_URL}img/login-bg.png)` }}
-                    >
-                      <Card sx={{ maxWidth: 420, mx: 'auto', borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', position: 'relative', zIndex: 2 }}>
-                        <CardContent sx={{ p: 4 }}>
-                          <Stack spacing={3} alignItems="center">
-                            <Typography variant="h4" sx={{ fontWeight: 700, color: '#2F3A67' }}>CCM</Typography>
-                            <img alt='Systra Logo' className="login-logo" src={`${import.meta.env.BASE_URL}img/logo.png`} />
-                            <Typography variant="body1" color="text.secondary">Sign In to your account</Typography>
-                            <Stack direction="row" spacing={2}>
-                              <Tooltip title="Systra Users">
-                                <span>
-                                  {/* TEMPORARY: onClick={this.devLogin} bypasses Microsoft sign-in. Revert to onClick={login} to restore real Azure AD login. */}
-                                  <Button variant="contained" size="large" onClick={this.devLogin} disabled={isInProgress || !loginEnabled}>
-                                    Login
-                                  </Button>
-                                </span>
-                              </Tooltip>
-                              <Tooltip title="Non Systra Users">
-                                <span>
-                                  <Button variant="outlined" size="large" onClick={this.externalLogin} disabled={!loginEnabled}>
-                                    External
-                                  </Button>
-                                </span>
-                              </Tooltip>
-                            </Stack>
-                          </Stack>
-                        </CardContent>
-                      </Card>
+    return (
+      <div>
+        <AzureAD provider={authProvider} reduxStore={basicReduxStore}>
+          {({ login, authenticationState }) => {
+            const isInProgress = authenticationState === AuthenticationState.InProgress;
+            const isUnauthenticated = authenticationState === AuthenticationState.Unauthenticated;
+            if (!(isUnauthenticated || isInProgress)) return null;
+
+            return (
+              <div className="cx-login">
+                <section className="cx-login-brand">
+                  <span className="cx-logo-mark">C</span>
+                  <h1>Draft the right reply, grounded in the project contract.</h1>
+                  <p>CCM reads your contract volumes, outgoing and incoming letters per project, then drafts responses with the exact clauses cited.</p>
+                  {[
+                    ['Project-scoped knowledge', 'Every answer comes only from that project’s records'],
+                    ['Clause citations', 'Each clause is verified against the source text'],
+                    ['Review before send', 'Drafter, reviewer and approver audit trail'],
+                  ].map(([title, text]) => (
+                    <div className="cx-login-value" key={title}><i /><div><b>{title}</b><span>{text}</span></div></div>
+                  ))}
+                </section>
+
+                <section className="cx-login-form">
+                  <form onSubmit={this.onLogin} noValidate>
+                    <div>
+                      <h2>Sign in</h2>
+                      <p className="cx-muted" style={{ margin: '6px 0 0' }}>Use your company account to continue.</p>
                     </div>
+                    {!loginEnabled && !loading && (
+                      <div className="cx-banner bad"><span className="cx-s12">Can't reach the CCM server. Check that the backend is running.</span></div>
+                    )}
+                    {/* TEMPORARY: onClick={this.devLogin} bypasses Microsoft sign-in. Revert to onClick={login} to restore real Azure AD login. */}
+                    <button type="button" className="cx-btn primary block" onClick={this.devLogin} disabled={isInProgress || !loginEnabled}>
+                      Continue with Microsoft SSO
+                    </button>
 
-                    <Dialog open={visible} onClose={this.toggleModal} maxWidth="xs" fullWidth>
-                      <DialogTitle>External Login</DialogTitle>
-                      <DialogContent dividers>
-                        {loading && <CircularProgress size={24} sx={{ position: 'absolute', top: 16, right: 16 }} />}
-                        <Box component="form" onSubmit={this.onLogin} sx={{ mt: 1 }}>
-                          <TextField
-                            fullWidth size="small" label="User Name" required
-                            value={loginValues.UserName}
-                            onChange={this.handleLoginField('UserName')}
-                            error={!!loginErrors.UserName} helperText={loginErrors.UserName}
-                            placeholder="Username"
-                            InputProps={{
-                              startAdornment: <InputAdornment position="start"><PersonOutlinedIcon fontSize="small" /></InputAdornment>
-                            }}
-                            sx={{ mb: 2 }}
-                          />
-                          <TextField
-                            fullWidth size="small" label="OTP" required type="password"
-                            value={loginValues.Password}
-                            onChange={this.handleLoginField('Password')}
-                            error={!!loginErrors.Password} helperText={loginErrors.Password}
-                            placeholder="OTP"
-                            InputProps={{
-                              startAdornment: <InputAdornment position="start"><LockOutlinedIcon fontSize="small" /></InputAdornment>
-                            }}
-                            sx={{ mb: 2 }}
-                          />
-                        </Box>
-                      </DialogContent>
-                      <DialogActions>
-                        <Button variant="contained" size="small" onClick={this.onLogin}>Login</Button>
-                        <Button variant="contained" size="small" onClick={this.sendOTP}>Send OTP</Button>
-                        <Button size="small" onClick={this.toggleModal}>Close</Button>
-                      </DialogActions>
-                    </Dialog>
-                  </div>
-                );
-              }
-            }}
-          </AzureAD>
+                    <div className="cx-or">or sign in as an external user</div>
 
-          <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={this.closeSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-            <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
-              {snackbar.message}
-            </Alert>
-          </Snackbar>
-        </div>
-      );
-    }
+                    <div className="cx-field">
+                      <label htmlFor="login-user">Username</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input id="login-user" className="cx-input" autoComplete="username" placeholder="name@company.com"
+                          value={loginValues.UserName} onChange={this.handleLoginField('UserName')} />
+                        <button type="button" className="cx-btn" onClick={this.sendOTP} disabled={!loginEnabled || loading}>
+                          {otp ? 'Resend OTP' : 'Send OTP'}
+                        </button>
+                      </div>
+                      {loginErrors.UserName && <span className="cx-s12" style={{ color: 'var(--cx-bad)' }}>{loginErrors.UserName}</span>}
+                    </div>
+                    <div className="cx-field">
+                      <label htmlFor="login-otp">One-time password</label>
+                      <input id="login-otp" className="cx-input" type="password" autoComplete="one-time-code" placeholder="••••••"
+                        value={loginValues.Password} onChange={this.handleLoginField('Password')} />
+                      {loginErrors.Password && <span className="cx-s12" style={{ color: 'var(--cx-bad)' }}>{loginErrors.Password}</span>}
+                    </div>
+                    <button type="submit" className="cx-btn block" disabled={!loginEnabled || loading}>
+                      {loading ? 'Please wait…' : 'Sign in'}
+                    </button>
+                  </form>
+                </section>
+              </div>
+            );
+          }}
+        </AzureAD>
+
+        <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={this.closeSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+          <Alert onClose={this.closeSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </div>
+    );
   }
 }
 export default Login;

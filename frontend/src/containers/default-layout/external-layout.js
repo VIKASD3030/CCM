@@ -11,9 +11,11 @@ import LoginState from '../../authentication/loginState'
 
 import CommonUtilityController from '../../master/controller/common-utility-controller'
 
-import ModernSidebar from './modern-sidebar'
-import ModernHeader from './modern-header'
 import RouteErrorBoundary from '../../components/ui/RouteErrorBoundary'
+import Sidebar from '../../ccm/ui/Sidebar'
+import { ToastHost } from '../../ccm/ui/kit'
+import CCM from '../../ccm/ccm-api'
+import '../../ccm/ui/ccm-ui.css'
 
 class ExternalLayout extends Component {
   constructor(props) {
@@ -23,11 +25,11 @@ class ExternalLayout extends Component {
       isExternalLogout: false,
       loading: false,
       routeItems: [],
-      dashboard: '/master/project-master',
+      dashboard: '/master/dashboard',
       renderStop: false,
       unauthorized: false,
       moduleMenuData: [],
-      sidebarOpen: true
+      userRole: '',
     }
 
     this.initializeLoginState();
@@ -61,6 +63,9 @@ class ExternalLayout extends Component {
   }
 
   componentDidMount() {
+    CCM.auth.me()
+      .then((d) => { const u = d.user || d; this.setState({ userRole: u.role_name || u.role || '' }) })
+      .catch(() => {});
     const userId = getSession('UserId') || LoginState.UserId;
     const userName = getSession('UserName') || LoginState.UserName;
 
@@ -139,10 +144,6 @@ class ExternalLayout extends Component {
   }
 
   loading = () => <div className="animated fadeIn pt-1 text-center">Loading...</div>
-
-  toggleSidebar = () => {
-    this.setState((prev) => ({ sidebarOpen: !prev.sidebarOpen }))
-  }
 
   handleSidebarNavigate = (url, menuItem = {}) => {
     if (url) {
@@ -236,8 +237,17 @@ class ExternalLayout extends Component {
     this.setState({ navItems: navItems, routeItems: routeItems });
   }
 
+  signOutEverywhere = (e) => {
+    this.signOut(e)
+    try {
+      authProvider.logout({ postLogoutRedirectUri: window.location.origin })
+    } catch (err) {
+      // Not an Azure session (dev or external login): the local sign-out above is enough.
+    }
+  }
+
   signOut = (e) => {
-    e.preventDefault()
+    if (e && e.preventDefault) e.preventDefault()
     let tokenKey = 'token' + getSession('UserId')
     const now = new Date();
     const formattedNow = now.getFullYear() + '-' +
@@ -301,8 +311,7 @@ class ExternalLayout extends Component {
 
 
   render() {
-    let { dashboard, navItems, isExternalLogout, unauthorized, loading, sidebarOpen } = this.state;
-    const isMobile = window.innerWidth < 1024;
+    let { dashboard, navItems, isExternalLogout, unauthorized, loading, userRole } = this.state;
 
     if (unauthorized || isExternalLogout) {
       return (
@@ -318,46 +327,53 @@ class ExternalLayout extends Component {
       return this.loading();
     }
 
+    const employeeName = LoginState.EmployeeName || getSession('EmployeeName') || getSession('UserName') || ''
+
     return (
-      <div className="App">
-        <React.Fragment>
-          <ModernHeader onLogout={this.signOut} sidebarOpen={sidebarOpen} />
+      <div className="cx-shell">
+        <Sidebar
+          menuItems={navItems.items && navItems.items.length > 0 ? navItems.items : navData.items}
+          userName={employeeName}
+          userRole={userRole}
+          onSignOut={this.signOutEverywhere}
+        />
 
-          <ModernSidebar
-            isOpen={sidebarOpen}
-            onToggle={this.toggleSidebar}
-            menuItems={navItems.items && navItems.items.length > 0 ? navItems.items : navData.items}
-            onNavigate={this.handleSidebarNavigate}
-          />
+        <main className="cx-main">
+          <Suspense fallback={this.loading()}>
+            <RouteErrorBoundary resetKey={window.location.hash}>
+              <Routes>
+                {routes.map((route, idx) =>
+                  route?.component ? (
+                    <Route
+                      key={idx}
+                      path={route.path}
+                      element={route.ownTopbar ? <route.component /> : (
+                        // Master/Admin pages draw their own title and breadcrumb; the shell
+                        // only adds the menu button that opens the sidebar on small screens.
+                        <>
+                          <div className="cx-legacy-bar">
+                            <button type="button" className="cx-btn ghost sm" aria-label="Open menu"
+                              onClick={() => window.dispatchEvent(new Event('cx-toggle-sidebar'))}>☰ Menu</button>
+                          </div>
+                          <div className="cx-legacy"><route.component /></div>
+                        </>
+                      )}
+                    />
+                  ) : null
+                )}
 
-          <main
-            className={`flex-1 transition-all duration-300 bg-gray-50 main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}
-          >
-              <Suspense fallback={this.loading()}>
-                <RouteErrorBoundary resetKey={window.location.hash}>
-                  <Routes>
-                    {routes.map((route, idx) =>
-                      route?.component ? (
-                        <Route
-                          key={idx}
-                          path={route.path}
-                          element={<route.component />}
-                        />
-                      ) : null
-                    )}
+                <Route path="/" element={<Navigate to={dashboard} replace />} />
 
-                    <Route path="/" element={<Navigate to={dashboard} replace />} />
-
-                    <Route path="*" element={
-                      <div style={{ padding: '2rem', textAlign: 'center' }}>
-                        <img src="/img/logo.png" alt="404 Not Found" style={{ width: '50%' }} />
-                      </div>
-                    } />
-                  </Routes>
-                </RouteErrorBoundary>
-              </Suspense>
-          </main>
-        </React.Fragment>
+                <Route path="*" element={
+                  <div style={{ padding: '2rem', textAlign: 'center' }}>
+                    <img src="/img/logo.png" alt="404 Not Found" style={{ width: '50%' }} />
+                  </div>
+                } />
+              </Routes>
+            </RouteErrorBoundary>
+          </Suspense>
+        </main>
+        <ToastHost />
       </div>
     )
   }

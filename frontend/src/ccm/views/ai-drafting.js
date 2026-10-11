@@ -1,1309 +1,541 @@
 /**
- * AiDrafting — React port of the original vanilla CCM AI Drafting panel
- * (frontend/js/drafting.js). ChatGPT-style drafting with full session
- * persistence via the /api/drafting-sessions API. Behavior preserved 1:1.
+ * AI Drafting workspace — wireframe 06.
+ *   left:   the incoming letter, its classification and detected references
+ *   centre: the SYSTRA reply (versions, regenerate, copy, PDF) + revise bar
+ *   right:  the project sources the draft used and the verification checks
+ * Without ?letter=… it shows the letters that are ready to draft.
  */
 import React from 'react';
-import {
-  Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  Box, Typography, TextField, IconButton, Avatar, Chip, Tooltip, Drawer, Divider,
-  CircularProgress, Backdrop, Stack, InputAdornment, Tab, Tabs, LinearProgress,
-  FormControl, InputLabel, Select, MenuItem,
-} from '@mui/material';
-import {
-  Add as AddIcon, Search as SearchIcon, Send as SendIcon, AttachFile as AttachIcon,
-  ContentCopy as CopyIcon, Refresh as RefreshIcon, Check as CheckIcon, Close as CloseIcon,
-  MoreVert as MoreIcon, AutoAwesome as SparkleIcon, PushPin as PinIcon, Delete as DeleteIcon,
-  Description as DocIcon, Folder as FolderIcon, SmartToy as RobotIcon, Person as PersonIcon,
-  MenuBook as BookIcon, Upload as UploadIcon, ExpandMore as ExpandIcon,
-  ChevronLeft as CollapseIcon, ChevronRight as ExpandSidebarIcon,
-  Menu as MenuIcon, PictureAsPdf as PdfIcon,
-} from '@mui/icons-material';
 import CCM from '../ccm-api';
-import { AppBreadcrumbs } from '../../components/ui';
 import SystraLetter from '../components/SystraLetter';
-import '../ccm.css';
+import {
+  PageTop, Btn, Card, Chip, Empty, Skeleton, StatusChip, ProjectSelect, Modal, go, ROUTES, toast, useQueryParam,
+  folderOf, letterRef, letterSubject, letterFrom, urgencyTone, humanize, cap, timeAgo, fmtDate, fmtDateTime,
+  detectReferences, waitForJob, ensureCcmProject, isOpenLetter, openOriginal,
+} from '../ui/kit';
+import { UploadLetterModal } from '../ui/modals';
 
-// 'new' included: upload now returns before classification finishes (it runs
-// in the background), so a just-uploaded letter must stay pickable right
-// away — generate_draft() classifies inline if it's still unclassified.
-const DRAFTABLE = ['new', 'classified', 'drafted', 'pending_review', 'approved'];
-
-const LETTER_TYPES = [
-  { value: 'eot', label: 'Extension of Time (EOT)' },
-  { value: 'payment_delay', label: 'Payment Delay' },
-  { value: 'drawing_issue', label: 'Drawing Issue' },
-  { value: 'variation_order', label: 'Variation Order' },
-  { value: 'site_instruction', label: 'Site Instruction' },
-  { value: 'rfi', label: 'Request for Information (RFI)' },
-  { value: 'nec_notice', label: 'NEC Notice' },
-  { value: 'claim', label: 'Claim' },
-  { value: 'correspondence', label: 'General Correspondence' },
+const REVISE_PROMPTS = [
+  'Make the tone more formal',
+  'Shorten to three paragraphs',
+  'Ask for the supporting documents',
+  'Propose a meeting to resolve this',
+  'Reserve our rights under the contract',
 ];
 
-const LETTER_TYPE_PROMPTS = {
-  eot: [
-    { label: 'EOT Claim — Delayed Site Access', prompt: 'Draft an Extension of Time claim citing delayed site access as the cause of delay. Include impact on programme, entitlement under the contract, and the requested extension period.' },
-    { label: 'EOT Notification — Weather Delays', prompt: 'Write an EOT notification for abnormal weather conditions causing delays to the construction programme. Reference the relevant contract clause and supporting meteorological data.' },
-    { label: 'EOT Submission — Programme Analysis', prompt: 'Prepare an EOT submission with a detailed programme analysis showing the critical path impact. Include as-built vs. baseline programme comparison and delay event identification.' },
-    { label: 'EOT Follow-Up — Rejection Response', prompt: 'Draft a follow-up response to the client\'s earlier rejection of our EOT claim. Address each rejection point with supporting evidence and contractual justification.' },
-  ],
-  payment_delay: [
-    { label: 'Payment Reminder — Overdue Invoice', prompt: 'Draft a formal payment reminder letter for an overdue invoice. State the invoice number, amount due, original due date, and request immediate payment.' },
-    { label: 'Payment Delay Notice — Contract Clause', prompt: 'Write a formal payment delay notice citing the relevant contract clause regarding late payment. Reference the outstanding amount, days overdue, and applicable interest provisions.' },
-    { label: 'Payment Escalation — Persistent Delays', prompt: 'Prepare an escalation letter for persistently delayed payments. Address it to senior management, summarizing the payment history, cumulative delays, and impact on project operations.' },
-    { label: 'Final Demand — Outstanding Payment', prompt: 'Draft a final demand letter for outstanding payment. State the total amount owed, deadline for payment, and consequences of non-payment including suspension of works or dispute resolution.' },
-  ],
-  drawing_issue: [
-    { label: 'RFI — Unclear Structural Details', prompt: 'Write a Request for Information regarding unclear details in the structural drawings. Specify the drawing numbers, sheet references, and the exact information needed to proceed with construction.' },
-    { label: 'Drawing Discrepancy Report', prompt: 'Draft a letter reporting discrepancies found between the issued drawings and actual site conditions. Include photo references, affected areas, and request revised drawings or clarification.' },
-    { label: 'Drawing Revision Request — MME Conflicts', prompt: 'Request revised drawings to resolve MME coordination conflicts. Identify the clashing systems, affected zones, and propose a resolution approach for the designer to confirm.' },
-    { label: 'Drawing Revision Impact Notice', prompt: 'Formal notice that a recent drawing revision impacts the construction sequence and programme. Detail the changes, affected work packages, and request a programme adjustment or cost impact assessment.' },
-  ],
-  variation_order: [
-    { label: 'VO Submission — Cost Impact', prompt: 'Draft a Variation Order submission with a detailed cost impact analysis. Include the scope of additional work, rate build-up, daywork sheets, and total claimed amount.' },
-    { label: 'VECP Proposal — Cost Savings', prompt: 'Write a Value Engineering Change Proposal (VECP) suggesting a cost-saving alternative while maintaining quality and functionality. Quantify the savings and describe the technical merit.' },
-    { label: 'Contra-Charge VO — Contractor Fault', prompt: 'Prepare a contra-charge Variation Order for changes necessitated by contractor-caused issues. Document the root cause, the additional work required, and the cost to be charged back.' },
-    { label: 'VO Instruction Acknowledgment', prompt: 'Draft a letter acknowledging receipt of a Variation Order instruction from the engineer. Confirm understanding of the scope, request any missing details, and note any reservations regarding cost or programme.' },
-  ],
-  site_instruction: [
-    { label: 'Instruction Acknowledgment', prompt: 'Draft an acknowledgment of a site instruction received from the engineer. Confirm receipt, understanding of the required actions, and the planned implementation timeline.' },
-    { label: 'Compliance Confirmation', prompt: 'Write a response confirming compliance with a site instruction issued. Detail the actions taken, resources deployed, and any outcomes or observations during execution.' },
-    { label: 'Formal Objection to Instruction', prompt: 'Formal objection to a site instruction citing contractual grounds. State the specific clause relied upon, explain why the instruction is considered beyond the contractor\'s obligations, and request withdrawal or amendment.' },
-    { label: 'Clarification Request', prompt: 'Request clarification on an ambiguous site instruction. Quote the instruction verbatim, identify the unclear portions, and ask for specific guidance to avoid misinterpretation.' },
-  ],
-  rfi: [
-    { label: 'RFI — Specification Clarification', prompt: 'Draft an RFI seeking clarification on a specific clause in the technical specifications. Reference the clause number, state the ambiguity, and request a definitive interpretation to proceed.' },
-    { label: 'RFI — Material Substitution', prompt: 'Write an RFI regarding approval for a material substitution. Describe the proposed alternative, explain the technical equivalence or superiority, and request formal approval before procurement.' },
-    { label: 'RFI — Trade Sequencing', prompt: 'Prepare an RFI on sequencing dependencies between trades. Identify the conflicting activities, explain the construction logic issue, and request the engineer\'s direction on the preferred sequence.' },
-    { label: 'RFI — Geotechnical Data', prompt: 'Submit an RFI reporting a discrepancy between the geotechnical data in the contract documents and actual ground conditions encountered. Request additional investigation or revised foundation recommendations.' },
-  ],
-  nec_notice: [
-    { label: 'Early Warning — Anticipated Delay', prompt: 'Draft an early warning notice under NEC4 for an anticipated delay event. Describe the matter, its potential impact on completion, and propose mitigation measures.' },
-    { label: 'CE Notification — Compensation Event', prompt: 'Write a Compensation Event notification under NEC4. Identify the event, the relevant compensation event clause, and provide a preliminary assessment of time and cost impact.' },
-    { label: 'Contractor Default Notice', prompt: 'Prepare a formal notification of contractor default under the contract. Specify the nature of the default, reference the relevant clause, and state the required corrective actions and timeframe.' },
-    { label: 'Termination Warning — Breach', prompt: 'Draft a warning notice of potential termination for breach of contract. Detail the breaches identified, the cure period allowed, and the consequences if the breach is not remedied within the specified time.' },
-  ],
-  claim: [
-    { label: 'Claim Submission — Entitlement', prompt: 'Draft a formal claim submission with a detailed entitlement analysis. Identify the cause of the claim, the contractual basis, the events timeline, and the relief sought.' },
-    { label: 'Claim Notification — Preliminary Quantum', prompt: 'Write a claim notification letter providing preliminary quantum estimation. State the cause, contractual basis, estimated financial impact, and confirm that detailed quantification will follow.' },
-    { label: 'Claim Report — Schedule Impact', prompt: 'Prepare a detailed claim report focusing on schedule impact analysis. Include as-built programme, delay analysis methodology, critical path assessment, and the claimed extension of time.' },
-    { label: 'Claim Response — Rejection', prompt: 'Draft a claim response letter rejecting an unsubstantiated claim. Address each element of the claim, provide counter-evidence, and explain why the claimed entitlement does not arise under the contract.' },
-  ],
-  correspondence: [
-    { label: 'Meeting Minutes Follow-Up', prompt: 'Draft a formal follow-up letter summarizing meeting minutes. List key decisions made, action items with responsible parties and deadlines, and confirm agreement on next steps.' },
-    { label: 'Stakeholder Update', prompt: 'Write a stakeholder update letter on project progress. Cover completed milestones, current activities, upcoming works, and any risks or issues requiring stakeholder awareness.' },
-    { label: 'Section Handover Letter', prompt: 'Prepare a handover letter for a completed section of works. Confirm completion, list outstanding minor items, attach relevant certificates, and request formal acceptance.' },
-    { label: 'General Inquiry — Engineer', prompt: 'Draft a general inquiry letter to the engineer. State the subject clearly, provide relevant background, ask specific questions, and request a timely response to avoid programme impact.' },
-  ],
+const CLAUSE_IN_TEXT = /(?:Sub-?Clause|Clause|Cl\.?)\s+(\d{1,2}(?:\.\d{1,2}){0,3})/gi;
+
+/** Citation chips for one paragraph: each clause it names, with the source
+ *  that backs it, or a warning when no source does. */
+function ParagraphCites({ text, verification }) {
+  const clauses = [...new Set([...(text || '').matchAll(CLAUSE_IN_TEXT)].map((m) => m[1]))];
+  if (!clauses.length) return null;
+  const cited = verification?.clauses_cited || [];
+  const unverified = new Set(verification?.unverified_clauses || []);
+  return (
+    <div className="cx-toolbar" style={{ gap: 6, marginTop: 6 }}>
+      {clauses.map((c) => {
+        const hit = cited.find((x) => x.clause === c && x.found);
+        if (hit) return <Chip key={c} tone="blue">{hit.source_id} · Cl {c}</Chip>;
+        if (unverified.has(c)) return <Chip key={c} tone="warn">Cl {c} · not in sources</Chip>;
+        return <Chip key={c} tone="gray">Cl {c}</Chip>;
+      })}
+    </div>
+  );
+}
+
+/** Readable on-screen view of the reply (wireframe 06). The branded A4 letter
+ *  is rendered separately, off-screen, for the PDF. */
+export function DraftPaper({ data }) {
+  const rec = data.recipient || {};
+  const sig = data.signatory || {};
+  const v = data.verification;
+  return (
+    <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: 13, fontSize: 12.5, lineHeight: 1.6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 12, borderBottom: '1px solid var(--cx-line)' }}>
+        <span className="cx-s11 cx-muted">SYSTRA MVA Consulting (India) Pvt Ltd</span>
+        <span className="cx-spacer" />
+        <b style={{ color: 'var(--cx-red)', fontSize: 15, letterSpacing: '.04em' }}>SYSTRA</b>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <span>Our Ref No.: {data.reference_number}</span><span className="cx-spacer" /><span>Date: {data.date}</span>
+      </div>
+      <div>
+        To,<br />
+        {rec.attention && <>Kind Attn: {rec.attention}<br /></>}
+        {[rec.name, rec.organization, ...(rec.address_lines || [])].filter(Boolean).map((line, i) => <React.Fragment key={i}>{line}<br /></React.Fragment>)}
+      </div>
+      <b style={{ fontSize: 13 }}>Subject: {data.subject}</b>
+      {data.project && <span>Project: {data.project}</span>}
+      {data.reference && <span>Ref: {data.reference}</span>}
+      <div>{data.salutation}</div>
+      {data.opening_line && <div>{data.opening_line}</div>}
+      {(data.body || []).map((p, i) => (
+        <div key={i}>{p}<ParagraphCites text={p} verification={v} /></div>
+      ))}
+      {(data.closing_lines || []).map((l, i) => <div key={`c${i}`}>{l}</div>)}
+      <div>With highest regards,</div>
+      <div>
+        <b>{sig.name}</b><br />
+        <span className="cx-muted">{[sig.designation_line_1, sig.designation_line_2].filter(Boolean).join(', ')}</span><br />
+        <span className="cx-muted">{sig.for_company}</span>
+      </div>
+      {(data.enclosure || []).length > 0 && <div className="cx-s12">Encl: {data.enclosure.join('; ')}</div>}
+    </div>
+  );
+}
+
+function LetterPicker({ letters, projects, onUpload }) {
+  const name = (id) => projects.find((p) => p.id === id)?.name;
+  const ready = letters.filter(isOpenLetter);
+  return (
+    <Card title="Choose a letter to reply to" right={<Btn onClick={onUpload}>Upload letter</Btn>}>
+      {ready.length === 0 ? (
+        <Empty title="No open letters" action={<Btn variant="primary" onClick={onUpload}>Upload letter</Btn>}>Upload a client letter to start drafting a reply.</Empty>
+      ) : (
+        <div className="cx-table-wrap">
+          <table className="cx-table">
+            <thead><tr><th>Ref</th><th>Subject</th><th>Project</th><th>Urgency</th><th>Received</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {ready.map((l) => (
+                <tr key={l.id} className="clickable" onClick={() => go(ROUTES.drafting(l.id))}>
+                  <td className="cx-s12">{letterRef(l)}</td>
+                  <td><div className="cx-ellipsis">{letterSubject(l)}</div></td>
+                  <td>{name(l.project_id) || <Chip tone="warn">Unassigned</Chip>}</td>
+                  <td>{l.urgency ? <Chip tone={urgencyTone(l.urgency)}>{cap(l.urgency)}</Chip> : '–'}</td>
+                  <td>{timeAgo(l.received_at)}</td>
+                  <td><StatusChip status={l.status} /></td>
+                  <td><Btn size="sm" onClick={(e) => { e.stopPropagation(); go(ROUTES.drafting(l.id)); }}>Open</Btn></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function IncomingLetter({ letter, projectName, projects, thread, onAssigned }) {
+  const refs = detectReferences(letter.raw_text);
+  const quoted = (letter.referenced_refs || []).slice(0, 4);
+  const answeredBy = thread?.answered_by?.[0];
+  const [projectId, setProjectId] = React.useState(letter.suggested_project_id || '');
+  const [busy, setBusy] = React.useState(false);
+  const suggested = projects.find((p) => p.id === letter.suggested_project_id);
+  const assign = async () => {
+    setBusy(true);
+    try {
+      await CCM.letters.assignProject(letter.id, await ensureCcmProject(projectId));
+      toast('Project confirmed', 'success');
+      onAssigned();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Incoming letter" right={<button type="button" className="cx-link" onClick={() => go(ROUTES.drafting())}>Change</button>}>
+      <div className="cx-kv"><span>From</span><b>{letterFrom(letter) || '—'}</b></div>
+      <div className="cx-kv"><span>Ref</span><b style={{ textAlign: 'right', overflowWrap: 'anywhere' }}>{letterRef(letter)}</b></div>
+      {letter.letter_date && <div className="cx-kv"><span>Dated</span><b>{fmtDate(letter.letter_date)}</b></div>}
+      <div className="cx-kv"><span>Received</span><b>{fmtDateTime(letter.received_at)}</b></div>
+      <div className="cx-toolbar" style={{ gap: 6 }}>
+        {projectName ? <Chip tone="red">{projectName}</Chip> : <Chip tone="warn">No project</Chip>}
+        {letter.category && <Chip tone="blue">{humanize(letter.domain_category || letter.category)}</Chip>}
+        {letter.urgency && <Chip tone={urgencyTone(letter.urgency)}>{cap(letter.urgency)}</Chip>}
+        {letter.posture && <Chip tone="gray">{humanize(letter.posture)}</Chip>}
+        {letter.scope && <Chip tone="gray">{humanize(letter.scope)}</Chip>}
+        {(letter.kd_tags || []).map((t) => <Chip key={t} tone="warn">{t}</Chip>)}
+      </div>
+
+      {answeredBy && (
+        <div className="cx-banner info" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+          <b className="cx-s12">Already answered</b>
+          <span className="cx-s12">
+            By {answeredBy.ref_no}{answeredBy.doc_date ? ` · ${fmtDate(answeredBy.doc_date)}` : ''}. A new draft should stay consistent with it.
+          </span>
+          <Btn size="sm" onClick={() => openOriginal(CCM.knowledge.filePath(answeredBy.id))}>Open that reply</Btn>
+        </div>
+      )}
+
+      {letter.has_file && (
+        <div>
+          <Btn size="sm" block onClick={() => openOriginal(CCM.letters.filePath(letter.id))}>Open the scanned letter ↗</Btn>
+          <div className="cx-s11 cx-muted" style={{ marginTop: 4 }}>
+            The page itself, with the letterhead, stamps and signature that the extracted text leaves out.
+            {letter.ocr_pages > 0 ? ` ${letter.ocr_pages} page${letter.ocr_pages === 1 ? '' : 's'} read with OCR.` : ''}
+          </div>
+        </div>
+      )}
+
+      {!letter.project_id ? (
+        <div className="cx-banner" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+          <b className="cx-s12">Confirm the project before drafting.</b>
+          {suggested && (
+            <span className="cx-s12">
+              Suggested: <b>{suggested.name}</b>{letter.routing_confidence != null ? ` (${Math.round(letter.routing_confidence * 100)}% sure)` : ''}. {letter.routing_reason}
+            </span>
+          )}
+          <ProjectSelect projects={projects} value={projectId} onChange={setProjectId} placeholder="Choose project" />
+          <Btn variant="primary" size="sm" onClick={assign} disabled={!projectId || busy}>Confirm project</Btn>
+        </div>
+      ) : letter.routing_reason ? (
+        <div className="cx-s11 cx-muted"><b>Why this project:</b> {letter.routing_reason}</div>
+      ) : null}
+
+      {(letter.intent || letter.requested_action) && (
+        <>
+          <hr className="cx-hr" />
+          {letter.intent && <div><div className="cx-eyebrow">Intent</div><div className="cx-s12">{letter.intent}</div></div>}
+          {letter.requested_action && <div><div className="cx-eyebrow">Requested action</div><div className="cx-s12">{letter.requested_action}</div></div>}
+          {letter.confidence_score != null && <div className="cx-s11 cx-muted">Classification confidence {Math.round(letter.confidence_score * 100)}%</div>}
+        </>
+      )}
+      <hr className="cx-hr" />
+      <div className="cx-letter-text">{letter.raw_text}</div>
+      {(refs.clauses.length > 0 || quoted.length > 0) && (
+        <div>
+          <div className="cx-eyebrow" style={{ marginBottom: 6 }}>Detected references</div>
+          <div className="cx-toolbar" style={{ gap: 6 }}>
+            {refs.clauses.map((c) => <Chip key={c} tone="warn">Clause {c}</Chip>)}
+            {quoted.map((r) => <Chip key={r} tone="warn" title={r}>{r.length > 24 ? `…${r.slice(-22)}` : r}</Chip>)}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Full text of one cited passage, with its document and a jump to the original page. */
+function ClauseModal({ chunkId, onClose }) {
+  const [data, setData] = React.useState(null);
+  const [error, setError] = React.useState(null);
+  React.useEffect(() => {
+    CCM.knowledge.chunk(chunkId).then(setData).catch((e) => setError(e.message));
+  }, [chunkId]);
+  const c = data?.chunk;
+  const d = data?.document;
+  const pages = c?.page_from ? (c.page_to && c.page_to !== c.page_from ? `pp.${c.page_from}-${c.page_to}` : `p.${c.page_from}`) : null;
+  return (
+    <Modal title={c?.clause_no ? `Clause ${c.clause_no}` : 'Passage'} onClose={onClose}>
+      {error && <div className="cx-banner bad"><span className="cx-s12">{error}</span></div>}
+      {!data && !error && <Skeleton h={120} />}
+      {data && (
+        <>
+          <div className="cx-toolbar" style={{ gap: 6 }}>
+            {d && <Chip tone="gray">{d.filename}</Chip>}
+            {d?.volume_label && <Chip tone="blue">{d.volume_label}</Chip>}
+            {pages && <Chip tone="gray">{pages}</Chip>}
+            {d?.ref_no && <Chip tone="warn">{d.ref_no}</Chip>}
+          </div>
+          <div className="cx-letter-text" style={{ maxHeight: 360, fontSize: 13 }}>{c.text}</div>
+          <div className="cx-toolbar">
+            <span className="cx-s11 cx-muted">Verify quoted clauses against the cited page before issuing.</span>
+            <span className="cx-spacer" />
+            {d && <Btn onClick={() => openOriginal(CCM.knowledge.filePath(d.id), { page: c.page_from })}>{c.page_from ? `Open original at p.${c.page_from}` : 'Open original'}</Btn>}
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+const BASIS = {
+  cited: ['Cited', 'blue', 'The letter names this clause'],
+  quoted: ['Quoted', 'gray', 'An earlier letter this one refers to'],
+  'prior reply': ['Prior reply', 'warn', 'Our reply that already answers this letter'],
+  relevant: ['Relevant', 'gray', 'Found by search'],
 };
 
-class AiDrafting extends React.Component {
-  constructor(props) {
-    super(props);
-    // DOM nodes of rendered SYSTRA letters, keyed by message id — used for
-    // PDF export and printing.
-    this.letterRefs = {};
-    // DOM nodes of each message row, keyed by message id — used to scroll a
-    // freshly generated draft into view starting from its top.
-    this.messageRefs = {};
-    this.state = {
-      // session/context
-      currentSessionId: null,
-      currentLetterId: null,
-      currentProjectId: null,
-      currentLetterData: null,
-      currentProjectData: null,
-      // data
-      sessions: [],
-      letters: [],
-      projects: [],
-      messages: [],
-      // ui
-      activeView: false,
-      sidebarCollapsed: false,
-      isGenerating: false,
-      searchTerm: '',
-      emptyInput: '',
-      activeInput: '',
-      // header project selector
-      headerProjectId: '',
-      // letter picker
-      pickerOpen: false,
-      pickerTab: 'select',
-      pickerSearch: '',
-      uploadStatus: null,
-      // sources
-      sourcesOpen: false,
-      lastSourceDocs: [],
-      // letter type
-      letterType: '',
-      // profile
-      profile: null,
-      // snackbar
-      snackOpen: false,
-      snackMsg: '',
-      snackSeverity: 'info',
-      // delete dialog
-      deleteDialogOpen: false,
-      deleteSessionId: null,
-    };
-    this.threadRef = React.createRef();
-    this.searchDebounce = null;
-    this.fileInputRef = React.createRef();
-  }
+function Sources({ draft, projectName, onOpen }) {
+  const [all, setAll] = React.useState(false);
+  const sources = Array.isArray(draft?.context_documents) ? draft.context_documents : [];
+  const shown = all ? sources : sources.slice(0, 6);
+  return (
+    <Card title="Sources used" right={projectName ? <Chip tone="red">Scoped: {projectName}</Chip> : null}>
+      {!draft ? <span className="cx-s12 cx-muted">The project records a draft cites appear here.</span>
+        : sources.length === 0 ? <span className="cx-s12 cx-muted">No project records were used. Upload contract volumes and letters to this project.</span>
+          : shown.map((s, i) => {
+            const folder = folderOf(s.document_type);
+            const [basisLabel, basisTone, basisHint] = BASIS[s.basis || 'relevant'] || BASIS.relevant;
+            const isContract = s.document_type === 'contract_volume';
+            const title = s.clause_no
+              ? `Clause ${s.clause_no}${s.volume_label ? ` · ${s.volume_label}` : ''}`
+              : (s.ref_no || s.source);
+            const where = [s.clause_no ? s.source : (s.ref_no ? s.source : null), s.page_from ? `p.${s.page_from}` : null,
+              s.doc_date ? fmtDate(s.doc_date) : null].filter(Boolean).join(' · ');
+            return (
+              <div className="cx-src" key={s.chunk_id || i} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Chip tone={folder?.tone || 'gray'}>{s.label || `#${i + 1}`}</Chip>
+                  <div className="cx-src-body">
+                    <div className="cx-src-title" title={s.source}>{title}</div>
+                    {where && <div className="cx-s11 cx-muted cx-ellipsis">{where}</div>}
+                  </div>
+                  <Chip tone={basisTone} title={basisHint}>{basisLabel}</Chip>
+                </div>
+                {s.also_in?.length > 0 && (
+                  <Chip tone="warn" title={`Same clause number also in: ${s.also_in.join(', ')}`}>Also in {s.also_in[0]}{s.also_in.length > 1 ? ` +${s.also_in.length - 1}` : ''}</Chip>
+                )}
+                {s.snippet && (
+                  <div className="cx-s11 cx-muted" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.snippet}</div>
+                )}
+                {s.chunk_id && (
+                  <button type="button" className="cx-link" style={{ textAlign: 'left' }} onClick={() => onOpen(s.chunk_id)}>
+                    {isContract ? 'Full clause text' : 'Full text'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+      {sources.length > 6 && <button type="button" className="cx-link" onClick={() => setAll((v) => !v)}>{all ? 'Show fewer' : `Show all ${sources.length} sources`}</button>}
+    </Card>
+  );
+}
 
-  componentDidMount() {
-    this.loadInitial();
-  }
+export function Verification({ draft }) {
+  const v = draft?.letter_data?.verification;
+  const issues = v?.issues || 0;
+  return (
+    <Card title="Verification" right={v ? <Chip tone={issues ? 'warn' : 'ok'}>{issues ? `${issues} to fix` : 'All passed'}</Chip> : null}>
+      {!draft ? <span className="cx-s12 cx-muted">Each clause the draft cites is checked against the source text.</span>
+        : !v ? <span className="cx-s12 cx-muted">This version was generated before verification was added. Regenerate to check it.</span>
+          : v.checks.length === 0 ? <span className="cx-s12 cx-muted">The draft cites no contract clauses.</span>
+            : v.checks.map((c, i) => (
+              <div className="cx-check" key={i}><span className={`cx-dot ${c.ok ? 'ok' : 'warn'}`} />{c.label}</div>
+            ))}
+    </Card>
+  );
+}
 
-  async loadInitial() {
-    await this.loadProjects();
-    await Promise.all([this.loadSessions(), this.loadLetters(), this.loadProfile()]);
-  }
+export default function AiDrafting() {
+  const letterId = useQueryParam('letter');
+  const [letter, setLetter] = React.useState(null);
+  const [drafts, setDrafts] = React.useState([]);
+  const [version, setVersion] = React.useState(null);
+  const [letters, setLetters] = React.useState(null);
+  const [projects, setProjects] = React.useState([]);
+  const [error, setError] = React.useState(null);
+  const [working, setWorking] = React.useState(null); // 'generate' | 'revise' | null
+  const [instruction, setInstruction] = React.useState('');
+  const [uploading, setUploading] = React.useState(false);
+  const [pdfOpen, setPdfOpen] = React.useState(false);
+  const [thread, setThread] = React.useState(null);
+  const [openChunk, setOpenChunk] = React.useState(null);
+  const letterNode = React.useRef(null);
 
-  // ── Data loading ──────────────────────────────────────────
-  async loadProjects() {
-    try { const d = await CCM.projects.list(); this.setState({ projects: d.projects || [] }); }
-    catch { this.setState({ projects: [] }); }
-  }
+  React.useEffect(() => { CCM.projects.list().then((d) => setProjects(d.projects || [])).catch(() => {}); }, []);
 
-  async loadSessions() {
-    try { const d = await CCM.draftingSessions.list(); this.setState({ sessions: d.sessions || [] }); }
-    catch { this.setState({ sessions: [] }); }
-  }
-
-  async loadTemplates() {
-    try { const d = await CCM.draftingSessions.templates(); this.setState({ templates: d.templates || [] }); }
-    catch { this.setState({ templates: [] }); }
-  }
-
-  async loadLetters() {
+  const loadLetter = React.useCallback(async () => {
+    if (!letterId) return;
     try {
-      const d = await CCM.letters.list();
-      const letters = (d.letters || d || []).filter(l => DRAFTABLE.includes(l.status));
-      this.setState({ letters });
-    } catch { this.setState({ letters: [] }); }
-  }
-
-  async loadProfile() {
-    try { const d = await CCM.auth.me(); this.setState({ profile: d.user || d }); }
-    catch { /* silent */ }
-  }
-
-  toast(msg, type = 'info') {
-    const severity = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
-    this.setState({ snackOpen: true, snackMsg: msg, snackSeverity: severity });
-  }
-
-  scrollThread() {
-    setTimeout(() => {
-      const el = this.threadRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    }, 0);
-  }
-
-  // Scroll so the START of the most recent message is at the top of the
-  // thread, instead of jumping to the bottom — used after a draft is
-  // generated so the user reads the new letter from the top and scrolls
-  // down themselves, rather than landing on its signature/footer.
-  scrollToLatestMessageTop = () => {
-    setTimeout(() => {
-      const container = this.threadRef.current;
-      const { messages } = this.state;
-      if (!container || !messages.length) return;
-      const last = messages[messages.length - 1];
-      const el = this.messageRefs[last.id || (messages.length - 1)];
-      container.scrollTop = el ? Math.max(0, el.offsetTop - 12) : container.scrollHeight;
-    }, 0);
-  };
-
-  // ── Session lifecycle ─────────────────────────────────────
-  startNewDraft = () => {
-    this.setState({
-      currentSessionId: null, currentLetterId: null, currentProjectId: null,
-      currentLetterData: null, currentProjectData: null,
-      activeView: false, emptyInput: '', messages: [],
-    });
-  };
-
-  openSession = async (sessionId) => {
-    try {
-      const data = await CCM.draftingSessions.get(sessionId);
-      const session = data.session;
-      const [letterData, projectData] = await Promise.all([
-        session.letter_id ? CCM.letters.get(session.letter_id).then(r => r.letter || r).catch(() => null) : Promise.resolve(null),
-        session.project_id ? CCM.projects.get(session.project_id).then(r => r.project || r).catch(() => null) : Promise.resolve(null),
+      const [l, d, t] = await Promise.all([
+        CCM.letters.get(letterId), CCM.drafts.forLetter(letterId), CCM.letters.thread(letterId).catch(() => null),
       ]);
-      const messages = session.messages || [];
-      let lastSourceDocs = [];
-      for (const m of messages) { if (m.role === 'assistant' && m.context_documents?.length) lastSourceDocs = m.context_documents; }
-      this.setState({
-        currentSessionId: sessionId,
-        currentLetterId: session.letter_id,
-        currentProjectId: session.project_id,
-        currentLetterData: letterData,
-        currentProjectData: projectData,
-        messages, activeView: true, sourcesOpen: false, lastSourceDocs,
-      }, this.scrollThread);
+      setLetter(l.letter || l);
+      setThread(t);
+      const list = (d.drafts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
+      setDrafts(list);
+      setVersion((v) => (list.some((x) => x.id === v) ? v : list[0]?.id || null));
+      setError(null);
     } catch (e) {
-      this.toast(`Failed to open session: ${e.message}`, 'error');
+      setError(e.message);
     }
-  };
+  }, [letterId]);
 
-  closeSession = () => {
-    this.setState({
-      currentSessionId: null, currentLetterId: null, currentLetterData: null,
-      currentProjectData: null, activeView: false, messages: [],
-    });
-  };
+  React.useEffect(() => {
+    setLetter(null); setDrafts([]); setVersion(null); setInstruction('');
+    if (letterId) loadLetter();
+    else CCM.letters.list(null, null, null, 200).then((d) => setLetters(d.letters || [])).catch((e) => setError(e.message));
+  }, [letterId, loadLetter]);
 
-  // ── Templates ─────────────────────────────────────────────
-  useTemplate(text) {
-    if (this.state.activeView) this.setState({ activeInput: text });
-    else this.setState({ emptyInput: text });
-  }
+  const draft = drafts.find((d) => d.id === version) || null;
+  const projectName = projects.find((p) => p.id === letter?.project_id)?.name;
 
-  // ── Search ────────────────────────────────────────────────
-  onSearch = (value) => {
-    this.setState({ searchTerm: value });
-    clearTimeout(this.searchDebounce);
-    if (!value.trim()) { this.loadSessions(); return; }
-    this.searchDebounce = setTimeout(async () => {
-      try { const d = await CCM.draftingSessions.search(value.trim()); this.setState({ sessions: d.sessions || [] }); }
-      catch { /* silent */ }
-    }, 300);
-  };
-
-  // ── Letter picker ─────────────────────────────────────────
-  openLetterPicker = () => this.setState({ pickerOpen: true, pickerTab: 'select', pickerSearch: '', uploadStatus: null });
-  closeLetterPicker = () => this.setState({ pickerOpen: false });
-
-  selectLetter = async (letterId) => {
-    const letter = this.state.letters.find(l => l.id === letterId);
-    let currentProjectId = this.state.currentProjectId;
-    if (letter?.project_id) currentProjectId = letter.project_id;
-    let currentLetterData = letter || null;
-    try { const ld = await CCM.letters.get(letterId); currentLetterData = ld.letter || ld; } catch { /* keep */ }
-    this.setState({ currentLetterId: letterId, currentProjectId, currentLetterData, pickerOpen: false });
-  };
-
-  onPickerFile = async (file) => {
-    if (!file) return;
-    this.setState({ uploadStatus: { type: 'loading', msg: `Uploading "${file.name}"…` } });
+  const generate = async (text) => {
+    setWorking('generate');
     try {
-      const projectId = this.state.headerProjectId || null;
-      const result = await CCM.letters.upload(file, projectId);
-      // Classification now runs in the background (upload no longer waits on
-      // it), so result.letter.category isn't populated yet — don't claim it is.
-      this.setState({ uploadStatus: { type: 'success', msg: 'Uploaded! Classifying in the background…' } });
-      this.toast('Letter uploaded successfully!', 'success');
-      await this.loadLetters();
-      if (result.letter?.id) {
-        setTimeout(() => { this.selectLetter(result.letter.id); this.setState({ pickerTab: 'select', uploadStatus: null }); }, 900);
-      }
+      const res = await CCM.drafts.generate(letterId, text || '');
+      await waitForJob(res.job_id, { timeoutMs: 180000 });
+      setVersion(null);
+      await loadLetter();
+      setInstruction('');
+      toast('Draft ready', 'success');
     } catch (e) {
-      this.setState({ uploadStatus: { type: 'error', msg: e.message } });
-      this.toast(`Upload failed: ${e.message}`, 'error');
-    }
-  };
-
-  // ── Sending / generating ──────────────────────────────────
-  sendFromEmpty = async () => {
-    let text = this.state.emptyInput.trim();
-    if (!text) return;
-    if (!this.state.currentLetterId) { this.toast('Please select a letter first — click the + button', 'warning'); return; }
-    if (!this.state.currentSessionId) { await this.ensureSession(); if (!this.state.currentSessionId) return; }
-    const lt = LETTER_TYPES.find(t => t.value === this.state.letterType);
-    if (lt) text = `[Letter Type: ${lt.label}] ${text}`;
-    this.setState({ activeView: true, emptyInput: '' });
-    await this.sendAndGenerate(text);
-  };
-
-  sendMessage = async () => {
-    if (this.state.isGenerating) return;
-    let text = this.state.activeInput.trim();
-    if (!text) return;
-    if (!this.state.currentLetterId) { this.toast('Please attach a letter first — click the + button', 'warning'); return; }
-    if (!this.state.currentSessionId) { await this.ensureSession(); if (!this.state.currentSessionId) return; }
-    const lt = LETTER_TYPES.find(t => t.value === this.state.letterType);
-    if (lt) text = `[Letter Type: ${lt.label}] ${text}`;
-    this.setState({ activeInput: '' });
-    await this.sendAndGenerate(text);
-  };
-
-  async ensureSession() {
-    try {
-      const letterName = this.state.currentLetterData?.filename || 'Draft';
-      const category = this.state.currentLetterData?.category?.replace(/_/g, ' ') || '';
-      const titleStr = (category ? `${letterName} — ${category}` : letterName).substring(0, 480);
-      // Use the letter's own project_id first, fall back to the header-selected project
-      const projectId = this.state.currentProjectId || this.state.headerProjectId || '';
-      const data = await CCM.draftingSessions.create(this.state.currentLetterId, projectId, titleStr);
-      const session = data.session;
-      let currentProjectData = this.state.currentProjectData;
-      if (!currentProjectData && projectId) {
-        try { const pd = await CCM.projects.get(projectId); currentProjectData = pd.project || pd; } catch { /* */ }
-      }
-      this.setState({ currentSessionId: session.id, currentProjectId: projectId, currentProjectData });
-      await this.loadSessions();
-    } catch (e) {
-      this.toast(`Failed to create session: ${e.message}`, 'error');
-    }
-  }
-
-  async sendAndGenerate(text) {
-    this.setState({ isGenerating: true });
-    const sessionId = this.state.currentSessionId;
-
-    // 1. persist user message
-    try { await CCM.draftingSessions.addMessage(sessionId, 'user', text); }
-    catch { this.toast('Failed to persist message', 'warning'); }
-
-    // 2. optimistic user bubble + thinking indicator
-    const userMsg = { role: 'user', content: text, id: 'u-' + Date.now() };
-    const thinkingMsg = { role: 'assistant', content: '', id: 'thinking', thinking: true };
-    this.setState(s => ({ messages: [...s.messages.filter(m => !m.thinking), userMsg, thinkingMsg] }), this.scrollThread);
-
-    // 3. generate draft
-    try {
-      const result = await CCM.drafts.generate(this.state.currentLetterId, text, sessionId);
-      const draft = await this.pollDraftResult(result.job_id);
-      if (draft) {
-        const sessionRes = await CCM.draftingSessions.get(sessionId);
-        const session = sessionRes.session;
-        let lastSourceDocs = this.state.lastSourceDocs;
-        for (const m of (session.messages || [])) { if (m.role === 'assistant' && m.context_documents?.length) lastSourceDocs = m.context_documents; }
-        this.setState({ messages: session.messages || [], lastSourceDocs }, this.scrollToLatestMessageTop);
-        this.toast('Draft generated!', 'success');
-        await this.loadSessions();
-      }
-    } catch (e) {
-      this.setState(s => ({
-        messages: [...s.messages.filter(m => !m.thinking), { role: 'assistant', content: `Error: ${e.message}`, id: 'e-' + Date.now() }],
-      }), this.scrollThread);
-      this.toast(`Generation failed: ${e.message}`, 'error');
+      toast(`Drafting failed: ${e.message}`, 'error');
     } finally {
-      this.setState({ isGenerating: false });
+      setWorking(null);
     }
-  }
-
-  async pollDraftResult(jobId) {
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 1000));
-      try {
-        const jobData = await CCM.jobs.get(jobId);
-        const job = jobData.job || jobData;
-        if (job.status === 'completed') {
-          const draftsRes = await CCM.drafts.forLetter(this.state.currentLetterId);
-          const drafts = (draftsRes.drafts || []).sort((a, b) => (b.version || 0) - (a.version || 0));
-          return drafts[0] || null;
-        }
-        if (job.status === 'failed') throw new Error(job.error_message || 'Job failed');
-      } catch (e) { if (e.message !== 'Job failed') throw e; }
-    }
-    throw new Error('Timed out waiting for draft');
-  }
-
-  // ── Message actions ───────────────────────────────────────
-  regenerateFromMessage = async (idx) => {
-    if (this.state.isGenerating) return;
-    let userText = 'Regenerate with improvements.';
-    for (let i = idx - 1; i >= 0; i--) { if (this.state.messages[i].role === 'user') { userText = this.state.messages[i].content; break; } }
-    await this.sendAndGenerate(userText);
   };
 
-  copyMessage = (content) => {
-    navigator.clipboard.writeText(content || '')
-      .then(() => this.toast('Copied to clipboard', 'success'))
-      .catch(() => this.toast('Copy failed', 'error'));
-  };
-
-  _letterFileName = (data) => {
-    const ref = (data?.reference_number || 'SYSTRA-Letter').replace(/[^A-Za-z0-9]+/g, '-');
-    return `${ref}.pdf`;
-  };
-
-  // Rasterise the rendered SYSTRA letter node into a clean A4 PDF.
-  // Reuses the app's existing html2canvas + jsPDF stack — no new dependency,
-  // no browser print dialog, so NO browser headers/footers, page numbers or
-  // "about:blank" end up in the file. Stays one page when the content fits.
-  downloadLetterPdf = async (key, data) => {
-    const el = this.letterRefs[key];
-    if (!el) { this.toast('Letter not ready yet', 'warning'); return; }
-    const prevBorder = el.style.border;
+  const revise = async (text) => {
+    if (!draft) { generate(text); return; }
+    setWorking('revise');
     try {
-      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
-        import('jspdf'),
-        import('html2canvas'),
-      ]);
-      el.style.border = 'none';   // drop the on-screen page edge for the capture
+      const res = await CCM.drafts.regenerate(draft.id, text || 'Regenerate with improvements.');
+      setVersion(res.draft?.id || null);
+      await loadLetter();
+      setInstruction('');
+      toast(`Version ${res.draft?.version || ''} ready`, 'success');
+    } catch (e) {
+      toast(`Revision failed: ${e.message}`, 'error');
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(draft?.draft_text || '')
+      .then(() => toast('Copied to clipboard', 'success'))
+      .catch(() => toast('Copy failed', 'error'));
+  };
+
+  const downloadPdf = async () => {
+    if (!draft?.letter_data) return;
+    // The branded A4 letter is rendered in a short-lived overlay: html2canvas
+    // only captures elements that are actually on screen.
+    setPdfOpen(true);
+    try {
+      const [{ default: JsPDF }, { default: html2canvas }] = await Promise.all([import('jspdf'), import('html2canvas')]);
+      await new Promise((r) => setTimeout(r, 250));
+      const el = letterNode.current;
+      if (!el) throw new Error('Letter not ready');
       const canvas = await html2canvas(el, {
         scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
         windowWidth: el.scrollWidth, windowHeight: el.scrollHeight,
       });
-      el.style.border = prevBorder;
-
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-      const pageW = pdf.internal.pageSize.getWidth();   // 595.28
-      const pageH = pdf.internal.pageSize.getHeight();  // 841.89
+      const pdf = new JsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
       const img = canvas.toDataURL('image/jpeg', 0.95);
       const fullH = (canvas.height * pageW) / canvas.width;
-
       if (fullH <= pageH * 1.02) {
-        // Fits on one page — keep it one page.
         pdf.addImage(img, 'JPEG', 0, 0, pageW, Math.min(fullH, pageH));
       } else {
-        let heightLeft = fullH;
-        let position = 0;
-        pdf.addImage(img, 'JPEG', 0, position, pageW, fullH);
-        heightLeft -= pageH;
-        while (heightLeft > 0) {
-          position -= pageH;
-          pdf.addPage();
-          pdf.addImage(img, 'JPEG', 0, position, pageW, fullH);
-          heightLeft -= pageH;
+        for (let y = 0; y < fullH; y += pageH) {
+          if (y > 0) pdf.addPage();
+          pdf.addImage(img, 'JPEG', 0, -y, pageW, fullH);
         }
       }
-      pdf.save(this._letterFileName(data));
+      const ref = (draft.letter_data?.reference_number || 'SYSTRA-Letter').replace(/[^A-Za-z0-9]+/g, '-');
+      pdf.save(`${ref}.pdf`);
     } catch (e) {
-      el.style.border = prevBorder;
-      this.toast(`PDF export failed: ${e.message}`, 'error');
+      toast(`PDF export failed: ${e.message}`, 'error');
+    } finally {
+      setPdfOpen(false);
     }
   };
 
-  approveDraft = async (draftId, idx) => {
-    if (!draftId) { this.toast('No draft ID found', 'warning'); return; }
-    try {
-      await CCM.review.approve(draftId);
-      this.toast('Draft approved!', 'success');
-      this.setState(s => {
-        const messages = [...s.messages];
-        if (messages[idx]) messages[idx] = { ...messages[idx], draft_status: 'approved' };
-        return { messages };
-      });
-    } catch (e) { this.toast(`Approval failed: ${e.message}`, 'error'); }
+  const sendForReview = () => {
+    toast(`Version ${draft.version} is in the review queue`, 'success');
+    go(ROUTES.review(draft.id));
   };
 
-  togglePin = async (sessionId, e) => {
-    e.stopPropagation();
-    try { await CCM.draftingSessions.togglePin(sessionId); await this.loadSessions(); }
-    catch (err) { this.toast(`Failed to pin: ${err.message}`, 'error'); }
-  };
-
-  deleteSession = (sessionId, e) => {
-    e.stopPropagation();
-    this.setState({ deleteDialogOpen: true, deleteSessionId: sessionId });
-  };
-
-  confirmDeleteSession = async () => {
-    const { deleteSessionId } = this.state;
-    this.setState({ deleteDialogOpen: false, deleteSessionId: null });
-    try {
-      await CCM.draftingSessions.delete(deleteSessionId);
-      if (this.state.currentSessionId === deleteSessionId) this.closeSession();
-      await this.loadSessions();
-      this.toast('Draft deleted', 'success');
-    } catch (err) { this.toast(`Delete failed: ${err.message}`, 'error'); }
-  };
-
-  toggleSourcesPanel = () => this.setState(s => ({ sourcesOpen: !s.sourcesOpen }));
-
-  autoResize = (e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px'; };
-
-  // ── Rendering helpers ─────────────────────────────────────
-  renderDraftText(text) {
-    if (!text) return <Typography sx={{ color: '#9CA3AF', fontStyle: 'italic' }}>No content</Typography>;
-    return text.split('\n').map((p, i) => p.trim()
-      ? <Typography key={i} sx={{ fontSize: 14, lineHeight: 1.7, color: '#374151', mb: 0.5 }}>{p}</Typography>
-      : <Box key={i} sx={{ height: 8 }} />
+  // ── Letter picker ──
+  if (!letterId) {
+    return (
+      <>
+        <PageTop crumbs={[{ label: 'Home', to: ROUTES.dashboard }]} title="AI Drafting"
+          actions={<Btn variant="primary" onClick={() => setUploading(true)}>Upload letter</Btn>} />
+        <div className="cx-content">
+          {error && <div className="cx-banner bad"><b>Couldn't load letters.</b><span className="cx-s12">{error}</span></div>}
+          {!letters ? <Skeleton h={300} /> : <LetterPicker letters={letters} projects={projects} onUpload={() => setUploading(true)} />}
+        </div>
+        {uploading && <UploadLetterModal projects={projects} onClose={() => setUploading(false)}
+          onUploaded={(l) => { setUploading(false); if (l?.id) go(ROUTES.drafting(l.id)); }} />}
+      </>
     );
   }
 
-  groupedSessions() {
-    const { sessions } = this.state;
-    const pinned = sessions.filter(s => s.is_pinned);
-    const recents = sessions.filter(s => !s.is_pinned);
-    const groups = {};
-    for (const s of recents) { const g = s.group || 'Older'; (groups[g] = groups[g] || []).push(s); }
-    const order = ['Today', 'Previous 7 days', 'Older'];
-    const out = [];
-    if (pinned.length) out.push({ label: 'Pinned', items: pinned });
-    for (const g of order) { if (groups[g]?.length) out.push({ label: g, items: groups[g] }); }
-    return out;
-  }
+  const ref = letter ? letterRef(letter) : '…';
+  const blocked = letter && !letter.project_id;
+  const canSend = draft && draft.status === 'pending_review';
 
-  renderSessionItem(s) {
-    const isActive = s.id === this.state.currentSessionId;
-    return (
-      <Box
-        key={s.id}
-        onClick={() => this.openSession(s.id)}
-        sx={{
-          display: 'flex', alignItems: 'center', px: 2, py: 1.25, mx: 1, mb: 0.25, borderRadius: '10px',
-          cursor: 'pointer', position: 'relative', transition: 'all 0.15s ease',
-          bgcolor: isActive ? '#EFF6FF' : 'transparent',
-          borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
-          '&:hover': { bgcolor: isActive ? '#EFF6FF' : '#F8FAFC' },
-        }}
-      >
-        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.title || 'Draft'}>
-            {s.title || 'Draft'}
-          </Typography>
-          <Typography sx={{ fontSize: 12, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', mt: 0.25 }}>
-            {s.preview || ''}
-          </Typography>
-        </Box>
-        <Box className="session-actions" sx={{ display: 'flex', gap: 0.25 }}>
-          <IconButton size="small" onClick={(e) => this.togglePin(s.id, e)} title={s.is_pinned ? 'Unpin' : 'Pin'}
-            sx={{ color: s.is_pinned ? '#2563EB' : '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, p: 0.5 }}>
-            <PinIcon sx={{ fontSize: 15 }} />
-          </IconButton>
-          <IconButton size="small" onClick={(e) => this.deleteSession(s.id, e)} title="Delete"
-            sx={{ color: '#9CA3AF', '&:hover': { color: '#EF4444', bgcolor: '#FEF2F2' }, p: 0.5 }}>
-            <DeleteIcon sx={{ fontSize: 15 }} />
-          </IconButton>
-        </Box>
-      </Box>
-    );
-  }
+  return (
+    <>
+      <PageTop crumbs={[{ label: 'Letters', to: ROUTES.letters }, { label: ref }]} title={`Draft reply · ${ref}`}
+        actions={(
+          <>
+            <Btn onClick={downloadPdf} disabled={!draft}>Download PDF</Btn>
+            <Btn variant="primary" onClick={sendForReview} disabled={!canSend}
+              title={draft && !canSend ? `This version is ${humanize(draft.status).toLowerCase()}` : undefined}>
+              Send for review
+            </Btn>
+          </>
+        )} />
+      <div className="cx-content" style={{ paddingTop: 20 }}>
+        {error && <div className="cx-banner bad"><b>Couldn't load this letter.</b><span className="cx-s12">{error}</span></div>}
+        {!letter ? <Skeleton h={520} /> : (
+          <div className="cx-row stack-md" style={{ alignItems: 'flex-start' }}>
+            <div className="cx-col" style={{ width: 320, flex: 'none' }}>
+              <IncomingLetter letter={letter} projectName={projectName} projects={projects} thread={thread} onAssigned={loadLetter} />
+            </div>
 
-  renderMessage(msg, idx) {
-    const role = msg.role;
-    if (msg.thinking) {
-      return (
-        <Box key={msg.id} sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'flex-start' }}>
-          <Avatar sx={{ width: 32, height: 32, bgcolor: '#F3F4F6', color: '#6B7280', mt: 0.25 }}>
-            <RobotIcon sx={{ fontSize: 16 }} />
-          </Avatar>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', py: 1.5, px: 2, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '18px 18px 18px 4px', minWidth: 80 }}>
-              {[0, 1, 2].map(i => (
-                <Box key={i} sx={{
-                  width: 7, height: 7, borderRadius: '50%', bgcolor: '#9CA3AF',
-                  animation: `pulse 1.4s ease-in-out ${i * 0.2}s infinite`,
-                  '@keyframes pulse': {
-                    '0%, 80%, 100%': { opacity: 0.3, transform: 'scale(0.85)' },
-                    '40%': { opacity: 1, transform: 'scale(1.1)' },
-                  },
-                }} />
-              ))}
-            </Box>
-            <Typography sx={{ fontSize: 11, color: '#9CA3AF', ml: 1 }}>Generating draft…</Typography>
-          </Box>
-        </Box>
-      );
-    }
-    const contextDocs = msg.context_documents || [];
-    const approved = msg.draft_status === 'approved';
-    const isUser = role === 'user';
+            <div className="cx-col cx-grow" style={{ gap: 12 }}>
+              <div className="cx-toolbar" style={{ gap: 8 }}>
+                {drafts.length > 0 ? (
+                  <select className="cx-select inline" value={version || ''} onChange={(e) => setVersion(e.target.value)} aria-label="Version">
+                    {drafts.map((d) => <option key={d.id} value={d.id}>Version {d.version} of {drafts.length}</option>)}
+                  </select>
+                ) : <Chip tone="gray">No draft yet</Chip>}
+                {draft && <StatusChip status={draft.status} />}
+                <span className="cx-spacer" />
+                <Btn onClick={() => revise('')} disabled={!draft || !!working || blocked}>Regenerate</Btn>
+                <Btn onClick={copy} disabled={!draft}>Copy</Btn>
+              </div>
 
-    return (
-      <Box
-        key={msg.id || idx}
-        ref={(el) => { this.messageRefs[msg.id || idx] = el; }}
-        sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'flex-start', flexDirection: isUser ? 'row-reverse' : 'row' }}
-      >
-        <Avatar sx={{
-          width: 32, height: 32, mt: 0.25,
-          bgcolor: isUser ? '#2563EB' : '#F3F4F6',
-          color: isUser ? '#FFFFFF' : '#6B7280',
-        }}>
-          {isUser ? <PersonIcon sx={{ fontSize: 16 }} /> : <RobotIcon sx={{ fontSize: 16 }} />}
-        </Avatar>
-        <Box sx={{ maxWidth: (!isUser && msg.letter_data) ? 860 : '75%', minWidth: 60, width: (!isUser && msg.letter_data) ? '100%' : 'auto' }}>
-          {msg.draft_version && (
-            <Chip
-              size="small"
-              label={`v${msg.draft_version} · ${(msg.draft_status || 'draft').replace('_', ' ')}`}
-              sx={{ height: 22, fontSize: 11, mb: 0.75, bgcolor: isUser ? 'rgba(255,255,255,0.2)' : '#F3F4F6', color: isUser ? '#fff' : '#6B7280' }}
-            />
-          )}
-          {(!isUser && msg.letter_data) ? (
-            <Box sx={{ overflowX: 'auto' }}>
-              <SystraLetter
-                data={msg.letter_data}
-                innerRef={(el) => { this.letterRefs[msg.id || idx] = el; }}
-              />
-            </Box>
-          ) : (
-            <Box sx={{
-              px: 2.5, py: isUser ? 1.5 : 2,
-              bgcolor: isUser ? '#2563EB' : '#FFFFFF',
-              color: isUser ? '#fff' : '#374151',
-              border: isUser ? 'none' : '1px solid #E5E7EB',
-              borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-              boxShadow: isUser ? '0 1px 2px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
-            }}>
-              {isUser
-                ? <Typography sx={{ fontSize: 14, lineHeight: 1.6 }}>{msg.content}</Typography>
-                : this.renderDraftText(msg.content)
-              }
-            </Box>
-          )}
-          {!isUser && (
-            <Stack direction="row" spacing={0.5} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
-              <Tooltip title="Regenerate">
-                <IconButton size="small" onClick={() => this.regenerateFromMessage(idx)} sx={{ color: '#6B7280', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' } }}>
-                  <RefreshIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Copy">
-                <IconButton size="small" onClick={() => this.copyMessage(msg.content)} sx={{ color: '#6B7280', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' } }}>
-                  <CopyIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              {msg.letter_data ? (
-                <Tooltip title="Download PDF">
-                  <IconButton size="small" onClick={() => this.downloadLetterPdf(msg.id || idx, msg.letter_data)} sx={{ color: '#6B7280', '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' } }}>
-                    <PdfIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              ) : null}
-              {approved
-                ? (
-                  <Chip
-                    size="small"
-                    icon={<CheckIcon sx={{ fontSize: 13, color: '#16A34A !important' }} />}
-                    label="Approved"
-                    sx={{ height: 24, fontSize: 11, bgcolor: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0' }}
-                  />
-                )
-                : (
-                  <Tooltip title="Approve">
-                    <IconButton size="small" onClick={() => this.approveDraft(msg.draft_response_id, idx)} sx={{ color: '#6B7280', '&:hover': { color: '#16A34A', bgcolor: '#F0FDF4' } }}>
-                      <CheckIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  </Tooltip>
-                )
-              }
-              {contextDocs.length ? (
-                <Tooltip title={`${contextDocs.length} source${contextDocs.length !== 1 ? 's' : ''}`}>
-                  <IconButton size="small" onClick={() => this.setState({ lastSourceDocs: contextDocs, sourcesOpen: true })} sx={{ color: '#6B7280', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' } }}>
-                    <BookIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Tooltip>
-              ) : null}
-            </Stack>
-          )}
-        </Box>
-      </Box>
-    );
-  }
-
-  // ── Header project change ─────────────────────────────────
-  onHeaderProjectChange = (projectId) => {
-    const project = this.state.projects.find(p => p.id === projectId) || null;
-    this.setState({
-      headerProjectId: projectId,
-      currentProjectId: projectId || null,
-      currentProjectData: project,
-    });
-  };
-
-  render() {
-    const {
-      sidebarCollapsed, templates, letters, projects, messages, activeView,
-      currentLetterData, currentProjectData, emptyInput, activeInput, searchTerm,
-      pickerOpen, pickerTab, pickerSearch,
-      uploadStatus, sourcesOpen, lastSourceDocs, profile, headerProjectId,
-    } = this.state;
-
-    const name = profile?.name || profile?.email || 'User';
-    const initials = name.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase();
-    const groups = this.groupedSessions();
-
-    const pickerLetters = letters.filter(l => {
-      const mq = !pickerSearch || (l.filename || '').toLowerCase().includes(pickerSearch.toLowerCase());
-      // filter by header-selected project if one is set
-      const mp = !headerProjectId || l.project_id === headerProjectId;
-      return mq && mp;
-    });
-
-    const SIDEBAR_W = sidebarCollapsed ? 64 : 280;
-
-    return (
-      <Box className="ccm-scope" sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', bgcolor: '#F8FAFC', overflow: 'hidden' }}>
-        {/* ─── Page header with breadcrumbs + project selector ─── */}
-        <Box sx={{
-          px: 3, pt: 2, pb: 1.5, display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between', borderBottom: '1px solid #E5E7EB', bgcolor: '#FFFFFF',
-        }}>
-          <AppBreadcrumbs />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <FolderIcon sx={{ fontSize: 18, color: headerProjectId ? '#2563EB' : '#9CA3AF' }} />
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel sx={{ fontSize: 13 }}>Select Project</InputLabel>
-              <Select
-                value={headerProjectId}
-                label="Select Project"
-                onChange={(e) => this.onHeaderProjectChange(e.target.value)}
-                sx={{
-                  fontSize: 13, borderRadius: '10px',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: headerProjectId ? '#2563EB' : '#E5E7EB' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#2563EB' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#2563EB' },
-                }}
-              >
-                <MenuItem value="" sx={{ fontSize: 13 }}><em>All Projects</em></MenuItem>
-                {projects.map(p => (
-                  <MenuItem key={p.id} value={p.id} sx={{ fontSize: 13 }}>{p.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          {/* ─── Sidebar ─── */}
-          <Box sx={{
-            width: SIDEBAR_W, flexShrink: 0, display: 'flex', flexDirection: 'column',
-            bgcolor: '#FFFFFF', borderRight: '1px solid #E5E7EB',
-            transition: 'width 0.2s ease', overflow: 'hidden',
-          }}>
-            {/* Sidebar top */}
-            <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1, borderBottom: '1px solid #F3F4F6' }}>
-              <IconButton size="small" onClick={() => this.setState(s => ({ sidebarCollapsed: !s.sidebarCollapsed }))}
-                sx={{ color: '#6B7280', '&:hover': { bgcolor: '#F3F4F6' } }}>
-                {sidebarCollapsed ? <ExpandSidebarIcon sx={{ fontSize: 20 }} /> : <CollapseIcon sx={{ fontSize: 20 }} />}
-              </IconButton>
-              {!sidebarCollapsed && (
-                <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-                    onClick={this.startNewDraft}
-                    sx={{
-                      textTransform: 'none', fontWeight: 600, fontSize: 13, borderRadius: '10px',
-                      color: '#fff', boxShadow: 'none',
-                      // `&&` doubles selector specificity so the fill beats the global
-                      // `.ccm-scope button { background: none }` rule (otherwise the
-                      // blue only showed on hover).
-                      '&&': { bgcolor: '#2563EB' },
-                      '&&:hover': { bgcolor: '#1D4ED8', boxShadow: 'none' },
-                    }}
-                  >
-                    New Draft
-                  </Button>
-                </Box>
-              )}
-            </Box>
-
-            {/* Search */}
-            {!sidebarCollapsed && (
-              <Box sx={{ px: 1.5, pt: 1.5, pb: 0.5 }}>
-                <TextField
-                  size="small"
-                  fullWidth
-                  placeholder="Search drafts…"
-                  value={searchTerm}
-                  onChange={(e) => this.onSearch(e.target.value)}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} /></InputAdornment>,
-                    sx: {
-                      borderRadius: '10px', fontSize: 13, bgcolor: '#F9FAFB',
-                      '& fieldset': { borderColor: '#E5E7EB' },
-                      '&:hover fieldset': { borderColor: '#D1D5DB' },
-                      '&.Mui-focused fieldset': { borderColor: '#2563EB', borderWidth: 1 },
-                    },
-                  }}
-                />
-              </Box>
-            )}
-
-            {/* Session list */}
-            <Box sx={{ flex: 1, overflow: 'auto', py: 1 }}>
-              {sidebarCollapsed ? (
-                /* Collapsed icons */
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, px: 0.5 }}>
-                  {sessions.slice(0, 20).map(s => {
-                    const isActive = s.id === this.state.currentSessionId;
-                    return (
-                      <Tooltip key={s.id} title={s.title || 'Draft'} placement="right">
-                        <IconButton size="small" onClick={() => this.openSession(s.id)} sx={{
-                          width: 40, height: 40, borderRadius: '10px',
-                          bgcolor: isActive ? '#EFF6FF' : 'transparent',
-                          color: isActive ? '#2563EB' : '#6B7280',
-                          '&:hover': { bgcolor: isActive ? '#EFF6FF' : '#F3F4F6' },
-                        }}>
-                          <DocIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
-                      </Tooltip>
-                    );
-                  })}
-                </Box>
-              ) : (
-                !groups.length ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6, color: '#9CA3AF' }}>
-                    <DocIcon sx={{ fontSize: 32, mb: 1, opacity: 0.4 }} />
-                    <Typography sx={{ fontSize: 13 }}>No drafts yet</Typography>
-                  </Box>
-                ) : groups.map(g => (
-                  <React.Fragment key={g.label}>
-                    <Typography sx={{ px: 3, pt: 2, pb: 0.75, fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      {g.label}
-                    </Typography>
-                    {g.items.map(s => this.renderSessionItem(s))}
-                  </React.Fragment>
-                ))
-              )}
-            </Box>
-
-            {/* Profile */}
-            {!sidebarCollapsed && (
-              <Box sx={{ p: 1.5, borderTop: '1px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                <Avatar sx={{ width: 36, height: 36, bgcolor: '#EEF2FF', color: '#4F46E5', fontSize: 13, fontWeight: 700 }}>
-                  {initials}
-                </Avatar>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</Typography>
-                  <Typography sx={{ fontSize: 11, color: '#9CA3AF', textTransform: 'capitalize' }}>{(profile?.role || '').replace(/^\w/, c => c.toUpperCase())}</Typography>
-                </Box>
-              </Box>
-            )}
-          </Box>
-
-          {/* ─── Main area ─── */}
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-            {!activeView ? (
-              /* ─── Empty state ─── */
-              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
-                <Box sx={{ maxWidth: 600, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <Box sx={{
-                    width: 64, height: 64, borderRadius: '18px',
-                    background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3,
-                    boxShadow: '0 8px 24px rgba(37,99,235,0.25)',
-                  }}>
-                    <SparkleIcon sx={{ fontSize: 32, color: '#FFFFFF' }} />
-                  </Box>
-                  <Typography variant="h4" sx={{ fontSize: 24, fontWeight: 700, color: '#111827', mb: 1 }}>
-                    What would you like to draft?
-                  </Typography>
-                  <Typography sx={{ color: '#6B7280', mb: 4, lineHeight: 1.6 }}>
-                    Select a letter and describe what to write — or click a template below.
-                  </Typography>
-
-                  {/* Composer */}
-                  <Box sx={{
-                    width: '100%', bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '16px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden',
-                  }}>
-                    <Box sx={{ px: 2, pt: 1.5, pb: 0 }}>
-                      <FormControl size="small" fullWidth>
-                        <InputLabel sx={{ fontSize: 13 }}>Project Letter Type</InputLabel>
-                        <Select
-                          value={this.state.letterType}
-                          label="Project Letter Type"
-                          onChange={(e) => this.setState({ letterType: e.target.value })}
-                          sx={{ fontSize: 13, borderRadius: '10px' }}
-                        >
-                          <MenuItem value="" sx={{ fontSize: 13 }}><em>None</em></MenuItem>
-                          {LETTER_TYPES.map(t => (
-                            <MenuItem key={t.value} value={t.value} sx={{ fontSize: 13 }}>{t.label}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-end', px: 1, py: 1 }}>
-                      <IconButton onClick={this.openLetterPicker} title="Attach letter"
-                        sx={{ color: '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, mr: 0.5 }}>
-                        <AttachIcon sx={{ fontSize: 20 }} />
-                      </IconButton>
-                      <TextField
-                        multiline
-                        maxRows={4}
-                        fullWidth
-                        placeholder="Ask anything…"
-                        value={emptyInput}
-                        onChange={(e) => { this.setState({ emptyInput: e.target.value }); this.autoResize(e); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendFromEmpty(); } }}
-                        variant="standard"
-                        InputProps={{
-                          disableUnderline: true,
-                          sx: { fontSize: 14, py: 0.75, color: '#111827', '& textarea': { '&::placeholder': { color: '#9CA3AF', opacity: 1 } } },
-                        }}
-                      />
-                      <IconButton onClick={this.sendFromEmpty} title="Send" sx={{
-                        bgcolor: emptyInput.trim() ? '#2563EB' : '#E5E7EB',
-                        color: emptyInput.trim() ? '#FFFFFF' : '#9CA3AF',
-                        width: 36, height: 36, ml: 0.5,
-                        '&:hover': { bgcolor: emptyInput.trim() ? '#1D4ED8' : '#D1D5DB' },
-                      }}>
-                        <SendIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Box>
-                    <Box sx={{ px: 2, pb: 1.5, pt: 0 }}>
-                      <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
-                        {currentLetterData
-                          ? <><DocIcon sx={{ fontSize: 14, color: '#2563EB', verticalAlign: 'middle', mr: 0.5 }} /><strong style={{ color: '#374151' }}>{currentLetterData.filename || 'Letter'}</strong> selected</>
-                          : 'No letter selected — click + to attach one'}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  {/* Letter type prompts */}
-                  {this.state.letterType && LETTER_TYPE_PROMPTS[this.state.letterType] && (
-                    <Box sx={{ mt: 3, width: '100%' }}>
-                      <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#6B7280', mb: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Suggested prompts
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {LETTER_TYPE_PROMPTS[this.state.letterType].map((p, i) => (
-                          <Box
-                            key={i}
-                            onClick={() => this.useTemplate(p.prompt)}
-                            sx={{
-                              display: 'flex', alignItems: 'flex-start', gap: 1.5,
-                              p: 1.5, borderRadius: '12px', cursor: 'pointer',
-                              border: '1px solid #E5E7EB', bgcolor: '#FFFFFF',
-                              '&:hover': { bgcolor: '#F5F8FF', borderColor: '#2563EB', boxShadow: '0 2px 8px rgba(37,99,235,0.08)' },
-                              transition: 'all 0.15s ease',
-                            }}
-                          >
-                            <SparkleIcon sx={{ fontSize: 16, color: '#7C3AED', mt: 0.25, flexShrink: 0 }} />
-                            <Box sx={{ minWidth: 0 }}>
-                              <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', mb: 0.25 }}>
-                                {p.label}
-                              </Typography>
-                              <Typography sx={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                                {p.prompt}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-                </Box>
-              </Box>
-            ) : (
-              /* ─── Active view ─── */
-              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                {/* Context bar */}
-                <Box sx={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  px: 2.5, py: 1, bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', minHeight: 48,
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
-                    <DocIcon sx={{ fontSize: 18, color: '#2563EB', flexShrink: 0 }} />
-                    <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {currentLetterData?.filename || '—'}
-                    </Typography>
-                    {currentProjectData && (
-                      <>
-                        <Typography sx={{ color: '#D1D5DB', mx: 0.5 }}>·</Typography>
-                        <FolderIcon sx={{ fontSize: 14, color: '#9CA3AF', flexShrink: 0 }} />
-                        <Typography sx={{ fontSize: 12, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {currentProjectData?.name || '—'}
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                    {lastSourceDocs.length ? (
-                      <Button
-                        size="small"
-                        startIcon={<BookIcon sx={{ fontSize: 16 }} />}
-                        onClick={this.toggleSourcesPanel}
-                        sx={{ textTransform: 'none', fontSize: 12, color: '#6B7280', borderRadius: '8px', px: 1.5,
-                          '&:hover': { bgcolor: '#F3F4F6' } }}
-                      >
-                        {lastSourceDocs.length} source{lastSourceDocs.length !== 1 ? 's' : ''}
-                      </Button>
-                    ) : null}
-                    <IconButton size="small" onClick={this.closeSession} title="Close session"
-                      sx={{ color: '#9CA3AF', '&:hover': { color: '#EF4444', bgcolor: '#FEF2F2' } }}>
-                      <CloseIcon sx={{ fontSize: 18 }} />
-                    </IconButton>
-                  </Box>
-                </Box>
-
-                {/* Thread */}
-                <Box ref={this.threadRef} sx={{
-                  flex: 1, overflow: 'auto', px: 3, py: 3,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                }}>
-                  <Box sx={{ width: '100%', maxWidth: 800 }}>
-                    {!messages.length ? (
-                      <Box sx={{ textAlign: 'center', py: 8 }}>
-                        <SparkleIcon sx={{ fontSize: 40, color: '#D1D5DB', mb: 1.5 }} />
-                        <Typography sx={{ color: '#9CA3AF', fontSize: 14 }}>Send a message to start drafting</Typography>
-                      </Box>
-                    ) : messages.map((m, i) => this.renderMessage(m, i))}
-                  </Box>
-                </Box>
-
-                {/* Composer */}
-                <Box sx={{ bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', px: 3, py: 2 }}>
-                  <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-                    <Box sx={{ mb: 1.5 }}>
-                      <FormControl size="small" fullWidth>
-                        <InputLabel sx={{ fontSize: 13 }}>Project Letter Type</InputLabel>
-                        <Select
-                          value={this.state.letterType}
-                          label="Project Letter Type"
-                          onChange={(e) => this.setState({ letterType: e.target.value })}
-                          sx={{ fontSize: 13, borderRadius: '10px' }}
-                        >
-                          <MenuItem value="" sx={{ fontSize: 13 }}><em>None</em></MenuItem>
-                          {LETTER_TYPES.map(t => (
-                            <MenuItem key={t.value} value={t.value} sx={{ fontSize: 13 }}>{t.label}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-end', bgcolor: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '14px', px: 1, py: 0.75, '&:focus-within': { borderColor: '#2563EB', boxShadow: '0 0 0 3px rgba(37,99,235,0.08)' }, transition: 'all 0.15s ease' }}>
-                      <IconButton onClick={this.openLetterPicker} title="Switch letter"
-                        sx={{ color: '#9CA3AF', '&:hover': { color: '#2563EB', bgcolor: '#EFF6FF' }, mr: 0.5 }}>
-                        <AttachIcon sx={{ fontSize: 20 }} />
-                      </IconButton>
-                      <TextField
-                        multiline
-                        maxRows={4}
-                        fullWidth
-                        placeholder="Refine the draft, or ask for another…"
-                        value={activeInput}
-                        onChange={(e) => { this.setState({ activeInput: e.target.value }); this.autoResize(e); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); } }}
-                        variant="standard"
-                        InputProps={{
-                          disableUnderline: true,
-                          sx: { fontSize: 14, py: 0.5, color: '#111827', '& textarea': { '&::placeholder': { color: '#9CA3AF', opacity: 1 } } },
-                        }}
-                      />
-                      <IconButton onClick={this.sendMessage} title="Send" disabled={this.state.isGenerating} sx={{
-                        bgcolor: activeInput.trim() ? '#2563EB' : '#E5E7EB',
-                        color: activeInput.trim() ? '#FFFFFF' : '#9CA3AF',
-                        width: 36, height: 36, ml: 0.5,
-                        '&:hover': { bgcolor: activeInput.trim() ? '#1D4ED8' : '#D1D5DB' },
-                        '&.Mui-disabled': { bgcolor: '#F3F4F6', color: '#D1D5DB' },
-                      }}>
-                        <SendIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Box>
-                    <Typography sx={{ fontSize: 11, color: '#9CA3AF', mt: 0.75, ml: 1 }}>
-                      {currentLetterData ? `Letter: ${currentLetterData.filename || 'selected'}` : 'No letter selected'}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            )}
-
-            {/* ─── Sources Drawer ─── */}
-            <Drawer
-              anchor="right"
-              open={sourcesOpen}
-              onClose={this.toggleSourcesPanel}
-              variant="temporary"
-              PaperProps={{ sx: { width: 360, borderRadius: '16px 0 0 16px' } }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.5, py: 2, borderBottom: '1px solid #E5E7EB' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <BookIcon sx={{ fontSize: 20, color: '#2563EB' }} />
-                  <Typography sx={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Source Documents</Typography>
-                </Box>
-                <IconButton size="small" onClick={this.toggleSourcesPanel} sx={{ color: '#6B7280', '&:hover': { bgcolor: '#F3F4F6' } }}>
-                  <CloseIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Box>
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                {!lastSourceDocs.length ? (
-                  <Box sx={{ textAlign: 'center', py: 6, color: '#9CA3AF' }}>
-                    <BookIcon sx={{ fontSize: 36, mb: 1, opacity: 0.3 }} />
-                    <Typography sx={{ fontSize: 13 }}>No source documents</Typography>
-                  </Box>
-                ) : lastSourceDocs.map((d, i) => (
-                  <Box key={i} sx={{
-                    display: 'flex', gap: 1.5, p: 1.5, mb: 1, borderRadius: '10px',
-                    border: '1px solid #F3F4F6', '&:hover': { bgcolor: '#F9FAFB' }, transition: 'background 0.15s',
-                  }}>
-                    <DocIcon sx={{ fontSize: 20, color: '#2563EB', mt: 0.25, flexShrink: 0 }} />
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{d.source || 'Document'}</Typography>
-                      {d.similarity != null && (
-                        <Typography sx={{ fontSize: 11, color: '#9CA3AF', mt: 0.25 }}>
-                          Relevance: {(d.similarity * 100).toFixed(1)}%
-                        </Typography>
-                      )}
-                      {d.chunk_text && (
-                        <Typography sx={{ fontSize: 12, color: '#6B7280', mt: 0.5, lineHeight: 1.5 }}>
-                          {d.chunk_text.substring(0, 150)}…
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            </Drawer>
-          </Box>
-        </Box>
-
-        {/* ─── Letter picker dialog ─── */}
-        <Dialog
-          open={pickerOpen}
-          onClose={this.closeLetterPicker}
-          maxWidth="sm"
-          fullWidth
-          PaperProps={{ sx: { borderRadius: '16px', overflow: 'hidden' } }}
-        >
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <DocIcon sx={{ color: '#2563EB' }} />
-              <Box>
-                <Typography sx={{ fontWeight: 700, fontSize: 17 }}>Attach Letter</Typography>
-                {headerProjectId && (
-                  <Typography sx={{ fontSize: 11, color: '#6B7280', mt: 0.25 }}>
-                    Project: <strong>{projects.find(p => p.id === headerProjectId)?.name || ''}</strong>
-                  </Typography>
+              <div className="cx-paper-wrap" style={{ position: 'relative', minHeight: 420 }}>
+                {working && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.75)', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                    <span className="cx-spinner" /> <b>{working === 'generate' ? 'Drafting from this project’s records…' : 'Revising the draft…'}</b>
+                  </div>
                 )}
-              </Box>
-            </Box>
-            <IconButton size="small" onClick={this.closeLetterPicker} sx={{ color: '#6B7280' }}>
-              <CloseIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </DialogTitle>
-
-          <Tabs
-            value={pickerTab === 'select' ? 0 : 1}
-            onChange={(_, v) => this.setState({ pickerTab: v === 0 ? 'select' : 'upload' })}
-            sx={{ px: 3, borderBottom: '1px solid #E5E7EB', '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, fontSize: 13.5 } }}
-          >
-            <Tab label="Select Existing" />
-            <Tab label="Upload New" />
-          </Tabs>
-
-          <DialogContent sx={{ pt: 2, pb: 2, minHeight: 320 }}>
-            {pickerTab === 'select' ? (
-              <Box>
-                <TextField
-                  size="small"
-                  fullWidth
-                  placeholder="Filter by filename…"
-                  value={pickerSearch}
-                  onChange={(e) => this.setState({ pickerSearch: e.target.value })}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} /></InputAdornment>,
-                    sx: { fontSize: 13.5, borderRadius: '10px' },
-                  }}
-                  sx={{ mb: 2 }}
-                />
-                <Box sx={{ maxHeight: 340, overflow: 'auto' }}>
-                  {!pickerLetters.length ? (
-                    <Box sx={{ textAlign: 'center', py: 5, color: '#9CA3AF' }}>
-                      <DocIcon sx={{ fontSize: 32, mb: 1, opacity: 0.3 }} />
-                      <Typography sx={{ fontSize: 13 }}>No letters found</Typography>
-                    </Box>
-                  ) : pickerLetters.map(l => {
-                    const sel = l.id === this.state.currentLetterId;
-                    return (
-                      <Box
-                        key={l.id}
-                        onClick={() => this.selectLetter(l.id)}
-                        sx={{
-                          display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, mb: 0.5, borderRadius: '10px',
-                          cursor: 'pointer', border: sel ? '1px solid #BFDBFE' : '1px solid transparent',
-                          bgcolor: sel ? '#EFF6FF' : 'transparent',
-                          '&:hover': { bgcolor: sel ? '#EFF6FF' : '#F9FAFB' },
-                          transition: 'all 0.12s',
-                        }}
-                      >
-                        <DocIcon sx={{ fontSize: 20, color: '#2563EB', flexShrink: 0 }} />
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {l.filename || 'Letter'}
-                          </Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
-                            <Chip size="small" label={(l.status || '').replace('_', ' ')}
-                              sx={{ height: 18, fontSize: 10, textTransform: 'capitalize', bgcolor: '#F3F4F6', color: '#6B7280' }} />
-                            {l.category && (
-                              <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>{l.category.replace(/_/g, ' ')}</Typography>
-                            )}
-                          </Box>
-                        </Box>
-                        {sel && <CheckIcon sx={{ fontSize: 18, color: '#2563EB', flexShrink: 0 }} />}
-                      </Box>
-                    );
-                  })}
-                </Box>
-              </Box>
-            ) : (
-              <Box>
-                <Box
-                  onClick={() => this.fileInputRef.current?.click()}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); this.onPickerFile(e.dataTransfer.files[0]); }}
-                  sx={{
-                    border: '2px dashed #D1D5DB', borderRadius: '14px', py: 5, textAlign: 'center',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                    '&:hover': { borderColor: '#2563EB', bgcolor: '#F5F8FF' },
-                  }}
-                >
-                  <UploadIcon sx={{ fontSize: 40, color: '#9CA3AF', mb: 1 }} />
-                  <Typography sx={{ fontSize: 14, fontWeight: 600, color: '#374151', mb: 0.5 }}>
-                    Drop your letter here, or click to browse
-                  </Typography>
-                  <Typography sx={{ fontSize: 12, color: '#9CA3AF' }}>
-                    PDF, DOCX, JPG, PNG · Max 20 MB
-                  </Typography>
-                  <input ref={this.fileInputRef} type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => this.onPickerFile(e.target.files[0])} />
-                </Box>
-                {uploadStatus && (
-                  <Box sx={{ mt: 2, p: 1.5, borderRadius: '10px', bgcolor: uploadStatus.type === 'error' ? '#FEF2F2' : uploadStatus.type === 'loading' ? '#F5F8FF' : '#F0FDF4', display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {uploadStatus.type === 'loading' && <CircularProgress size={18} sx={{ color: '#2563EB' }} />}
-                    {uploadStatus.type === 'error' && <CloseIcon sx={{ fontSize: 18, color: '#EF4444' }} />}
-                    {uploadStatus.type === 'success' && <CheckIcon sx={{ fontSize: 18, color: '#16A34A' }} />}
-                    <Typography sx={{ fontSize: 13, color: uploadStatus.type === 'error' ? '#DC2626' : uploadStatus.type === 'loading' ? '#2563EB' : '#16A34A' }}>
-                      {uploadStatus.msg}
-                    </Typography>
-                  </Box>
+                {draft?.letter_data ? (
+                  <DraftPaper data={draft.letter_data} />
+                ) : draft ? (
+                  <pre style={{ whiteSpace: 'pre-wrap', padding: 32, margin: 0, font: 'inherit' }}>{draft.draft_text}</pre>
+                ) : (
+                  <Empty title={blocked ? 'Confirm the project to start drafting' : 'No draft yet'}>
+                    {blocked ? 'Drafts only use the records of the letter’s project.'
+                      : 'CCM will read this project’s contract volumes and earlier letters, then draft a reply with the clauses cited.'}
+                  </Empty>
                 )}
-              </Box>
-            )}
-          </DialogContent>
-        </Dialog>
+              </div>
 
-        {/* ─── Snackbar ─── */}
-        <Snackbar
-          open={this.state.snackOpen}
-          autoHideDuration={4000}
-          onClose={() => this.setState({ snackOpen: false })}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert
-            onClose={() => this.setState({ snackOpen: false })}
-            severity={this.state.snackSeverity}
-            variant="filled"
-            sx={{ width: '100%', borderRadius: '10px' }}
-          >
-            {this.state.snackMsg}
-          </Alert>
-        </Snackbar>
+              <div className="cx-prompts">
+                {REVISE_PROMPTS.map((p) => (
+                  <button key={p} type="button" className="cx-prompt" disabled={!!working || blocked} onClick={() => setInstruction(p)}>{p}</button>
+                ))}
+              </div>
+              <form className="cx-ins" onSubmit={(e) => { e.preventDefault(); if (!working && !blocked) revise(instruction.trim()); }}>
+                <textarea rows={1} value={instruction} onChange={(e) => setInstruction(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form.requestSubmit(); } }}
+                  placeholder={draft ? 'Ask AI to revise, e.g. soften tone, add Clause 8.4, shorten' : 'Optional instructions for the first draft'}
+                  aria-label="Instructions" disabled={blocked} />
+                <Btn variant="primary" size="sm" type="submit" disabled={!!working || blocked || (draft && !instruction.trim())}>
+                  {draft ? 'Revise' : 'Generate draft'}
+                </Btn>
+              </form>
+            </div>
 
-        {/* ─── Delete dialog ─── */}
-        <Dialog
-          open={this.state.deleteDialogOpen}
-          onClose={() => this.setState({ deleteDialogOpen: false, deleteSessionId: null })}
-          PaperProps={{ sx: { borderRadius: '16px', p: 1 } }}
-        >
-          <DialogTitle sx={{ fontSize: 17, fontWeight: 700 }}>Delete this drafting conversation?</DialogTitle>
-          <DialogContent>
-            <Typography sx={{ fontSize: 14, color: '#6B7280' }}>This cannot be undone.</Typography>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => this.setState({ deleteDialogOpen: false, deleteSessionId: null })}
-              sx={{ textTransform: 'none', borderRadius: '8px', color: '#6B7280' }}>
-              Cancel
-            </Button>
-            <Button color="error" variant="contained" onClick={this.confirmDeleteSession}
-              sx={{ textTransform: 'none', borderRadius: '8px', boxShadow: 'none', '&:hover': { boxShadow: 'none' } }}>
-              Delete
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
-    );
-  }
+            <div className="cx-col" style={{ width: 340, flex: 'none' }}>
+              <Sources draft={draft} projectName={projectName} onOpen={setOpenChunk} />
+              <Verification draft={draft} />
+            </div>
+          </div>
+        )}
+      </div>
+      {openChunk && <ClauseModal chunkId={openChunk} onClose={() => setOpenChunk(null)} />}
+      {pdfOpen && draft?.letter_data && (
+        <div className="cx-scrim" style={{ alignItems: 'flex-start', overflow: 'auto', flexDirection: 'column', gap: 12 }} aria-live="polite">
+          <div style={{ color: '#fff', display: 'flex', gap: 10, alignItems: 'center', alignSelf: 'center' }}><span className="cx-spinner" />Preparing PDF…</div>
+          <div style={{ alignSelf: 'center' }}>
+            <SystraLetter data={draft.letter_data} innerRef={(n) => { letterNode.current = n; }} />
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
-
-export default AiDrafting;

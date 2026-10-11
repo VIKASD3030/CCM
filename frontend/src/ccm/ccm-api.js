@@ -60,9 +60,20 @@ function putForm(url, data = {}) {
   return request(url, { method: 'PUT', body: formData });
 }
 
+/** Fetch a protected file (needs the auth header, so a plain link won't do). */
+async function blob(url) {
+  const response = await fetch(`${BASE_URL}${url}`, { headers: authHeader() });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+  }
+  return response.blob();
+}
+
 const CCM = {
   BASE_URL,
   request,
+  blob,
   upload,
   postForm,
   putForm,
@@ -70,12 +81,28 @@ const CCM = {
   // ─── Knowledge Base ───────────────────────────────
   knowledge: {
     upload(file, category) { return upload('/api/knowledge/upload', file, { category }); },
-    list() { return request('/api/knowledge/documents'); },
+    uploadToFolder(file, projectId, documentType) {
+      return upload('/api/knowledge/upload', file, { project_id: projectId, document_type: documentType });
+    },
+    list(params = {}) {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') qs.set(k, v); });
+      const q = qs.toString();
+      return request(`/api/knowledge/documents${q ? '?' + q : ''}`);
+    },
     delete(id) { return request(`/api/knowledge/documents/${id}`, { method: 'DELETE' }); },
+    reindex(id) { return request(`/api/knowledge/documents/${id}/reindex`, { method: 'POST' }); },
+    chunk(id) { return request(`/api/knowledge/chunks/${id}`); },
+    importZip(file, projectId, documentType) {
+      return upload('/api/knowledge/import-zip', file, { project_id: projectId, document_type: documentType });
+    },
+    filePath(id) { return `/api/knowledge/documents/${id}/file`; },
     stats() { return request('/api/knowledge/stats'); },
-    search(query, topK = 5, category = null) {
+    search(query, topK = 5, category = null, projectId = null, documentType = null) {
       const data = { query, top_k: topK };
       if (category) data.category = category;
+      if (projectId) data.project_id = projectId;
+      if (documentType) data.document_type = documentType;
       return postForm('/api/knowledge/search', data);
     },
   },
@@ -84,10 +111,12 @@ const CCM = {
   projects: {
     list() { return request('/api/projects'); },
     get(id) { return request(`/api/projects/${id}`); },
-    create(name, sharepointSiteId = null) { return postForm('/api/projects', { name, sharepoint_site_id: sharepointSiteId }); },
+    create(name, sharepointSiteId = null, extra = {}) { return postForm('/api/projects', { name, sharepoint_site_id: sharepointSiteId, ...extra }); },
     update(id, data) { return putForm(`/api/projects/${id}`, data); },
     delete(id) { return request(`/api/projects/${id}`, { method: 'DELETE' }); },
     syncLogs(id) { return request(`/api/projects/${id}/sync-logs`); },
+    sync(id) { return postForm(`/api/projects/${id}/sync`); },
+    linkMaster(masterId) { return postForm(`/api/projects/link-master/${masterId}`); },
     stats(id) { return request(`/api/projects/${id}/stats`); },
   },
 
@@ -98,15 +127,20 @@ const CCM = {
       if (projectId) extra.project_id = projectId;
       return upload('/api/letters/upload', file, extra);
     },
-    list(status = null, category = null) {
+    list(status = null, category = null, projectId = null, limit = 200) {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
       if (category) params.set('category', category);
+      if (projectId) params.set('project_id', projectId);
+      if (limit) params.set('limit', limit);
       const qs = params.toString();
       return request(`/api/letters${qs ? '?' + qs : ''}`);
     },
     get(id) { return request(`/api/letters/${id}`); },
     reclassify(id, category, urgency) { return putForm(`/api/letters/${id}/reclassify`, { category, urgency }); },
+    thread(id) { return request(`/api/letters/${id}/thread`); },
+    filePath(id) { return `/api/letters/${id}/file`; },
+    assignProject(id, projectId) { return putForm(`/api/letters/${id}/project`, { project_id: projectId }); },
   },
 
   // ─── Drafts ───────────────────────────────────────
@@ -127,6 +161,7 @@ const CCM = {
     send(draftId) { return postForm(`/api/review/${draftId}/send`); },
     archive(letterId) { return postForm(`/api/review/archive/${letterId}`); },
     dashboardStats() { return request('/api/review/dashboard/stats'); },
+    queue(status = 'pending_review') { return request(`/api/review/queue?status=${encodeURIComponent(status)}`); },
   },
 
   // ─── Auth / Users ──────────────────────────────────

@@ -3,6 +3,7 @@ ARQ worker for background job processing.
 Implements tasks for letter classification, draft generation, and KB document indexing.
 Each task updates the jobs table and sends pg_notify on completion/failure.
 """
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -84,8 +85,26 @@ async def classify_letter_task(ctx: Dict[str, Any], letter_id: str) -> Dict[str,
             if not letter:
                 raise ValueError(f"Letter {letter_id} not found")
 
-            # Predict a project only if the upload didn't already specify one.
+            from backend.services.letter_intake import (
+                ROUTE_AUTO_ASSIGN_CONFIDENCE, apply_classification, classify_letter, route_by_keywords,
+            )
+
+            def apply_routing(routing: dict, valid_ids: set) -> None:
+                """Assign the project when confident, otherwise leave a suggestion
+                (with its reason) for the user to confirm."""
+                if routing["project_id"] not in valid_ids:
+                    return
+                letter.routing_confidence = routing["confidence"]
+                letter.routing_reason = routing["reason"]
+                if routing["confidence"] >= ROUTE_AUTO_ASSIGN_CONFIDENCE:
+                    letter.project_id = routing["project_id"]
+                    letter.suggested_project_id = None
+                else:
+                    letter.suggested_project_id = routing["project_id"]
+
+            # Route to a project only if the upload didn't already specify one.
             projects_list = None
+            valid_ids: set = set()
             if not letter.project_id:
                 from backend.models.project import Project
                 projects_result = await session.execute(
@@ -93,20 +112,31 @@ async def classify_letter_task(ctx: Dict[str, Any], letter_id: str) -> Dict[str,
                 )
                 active_projects = projects_result.scalars().all()
                 projects_list = [p.to_dict() for p in active_projects] if active_projects else None
+                valid_ids = {p["id"] for p in (projects_list or [])}
+                # 1. The letter names a project's code or name: no LLM needed.
+                keyword_route = route_by_keywords(letter.raw_text, projects_list or [])
+                if keyword_route:
+                    apply_routing(keyword_route, valid_ids)
+                    # Keep the routing even if classification below fails.
+                    await session.commit()
 
             # Classify the letter text
-            from backend.services.letter_intake import classify_letter
-            classification = await classify_letter(letter.raw_text, projects=projects_list)
+            classification = await classify_letter(
+                letter.raw_text,
+                projects=projects_list if not letter.project_id else None,
+            )
 
             # Update letter with classification results
-            letter.category = classification.get("category")
-            letter.urgency = classification.get("urgency")
-            letter.intent = classification.get("intent")
-            letter.confidence_score = classification.get("confidence_score")
-            letter.key_entities = classification.get("key_entities")
-            letter.status = "classified"
+            apply_classification(letter, classification)
             if not letter.project_id and classification.get("predicted_project"):
-                letter.project_id = classification["predicted_project"].get("predicted_project_id")
+                pred = classification["predicted_project"]
+                # Only accept a real project id; anything else leaves the letter
+                # unassigned so the inbox asks the user to confirm a project.
+                apply_routing({
+                    "project_id": pred.get("predicted_project_id"),
+                    "confidence": float(pred.get("confidence") or 0.0),
+                    "reason": pred.get("reason") or "Suggested by CCM from the letter's content.",
+                }, valid_ids)
             await session.flush()
 
             await _update_job_status(
@@ -174,19 +204,22 @@ async def generate_draft_task(ctx: Dict[str, Any], letter_id: str, tone: str = "
             raise
 
 
+# Indexing reads, OCRs and embeds a whole document. A bulk ZIP import queues
+# hundreds at once, so cap how many run at the same time in this process.
+_INDEX_SLOTS = asyncio.Semaphore(3)
+
+
 async def index_kb_document_task(ctx: Dict[str, Any], document_id: str) -> Dict[str, Any]:
     """
     Index a knowledge base document in the background:
-    1. Load file from storage
-    2. Extract text
-    3. Chunk text
-    4. Generate embeddings
-    5. Store chunks
+    1. Load the original file from storage
+    2. Extract text (OCR for scanned pages) and correspondence metadata
+    3. Chunk (clause-aware for contract volumes), embed and store
     """
     job_id = ctx.get("job_id", "")
     logger.info("index_kb_document_task.start", document_id=document_id, job_id=job_id)
 
-    async with async_session_factory() as session:
+    async with _INDEX_SLOTS, async_session_factory() as session:
         try:
             await _update_job_status(session, job_id, "running")
 
@@ -204,60 +237,32 @@ async def index_kb_document_task(ctx: Dict[str, Any], document_id: str) -> Dict[
                 return {"status": "completed", "document_id": document_id}
 
             from backend.services.storage import storage_backend
-            from backend.services.knowledge_base import extract_text_from_bytes, chunk_text, generate_embeddings
+            from backend.services.knowledge_base import process_document
 
-            # Load file from storage
             file_content = await storage_backend.download(doc.storage_path)
-            raw_text = await extract_text_from_bytes(file_content, doc.file_type, doc.filename)
-            doc.raw_text = raw_text
-            await session.flush()
-
-            # Chunk and embed
-            chunks = chunk_text(raw_text)
-
-            if not chunks:
-                doc.status = "failed"
-                doc.chunk_count = 0
-                await session.flush()
-                raise ValueError(f"Document {document_id} produced no chunks")
-
-            embeddings = await generate_embeddings(chunks)
-
-            # Remove existing chunks (if re-indexing)
-            delete_stmt = select(DocumentChunk).where(DocumentChunk.document_id == document_id)
-            existing = await session.execute(delete_stmt)
-            for chunk in existing.scalars().all():
-                await session.delete(chunk)
-
-            # Store new chunks
-            for idx, (chunk_text_str, embedding) in enumerate(zip(chunks, embeddings)):
-                chunk = DocumentChunk(
-                    document_id=document_id,
-                    chunk_index=idx,
-                    chunk_text=chunk_text_str,
-                    embedding=embedding,
-                    metadata_={
-                        "filename": doc.filename,
-                        "category": doc.category,
-                        "chunk_index": idx,
-                        "total_chunks": len(chunks),
-                    },
-                )
-                session.add(chunk)
-
-            doc.chunk_count = len(chunks)
-            doc.status = "indexed"
-            await session.flush()
+            chunk_total = await process_document(session, doc, file_content)
+            if not chunk_total:
+                raise ValueError(doc.status_detail or f"Document {document_id} produced no chunks")
 
             await _update_job_status(
                 session, job_id, "completed",
-                result={"document_id": document_id, "chunks": len(chunks)}
+                result={"document_id": document_id, "chunks": chunk_total}
             )
-            logger.info("index_kb_document_task.success", document_id=document_id, chunks=len(chunks), job_id=job_id)
+            logger.info("index_kb_document_task.success", document_id=document_id, chunks=chunk_total, job_id=job_id)
             return {"status": "completed", "document_id": document_id}
         except Exception as e:
             error_msg = str(e)
             logger.error("index_kb_document_task.failed", document_id=document_id, job_id=job_id, error=error_msg)
+            # Don't leave the document stuck in "processing" in the project folder.
+            try:
+                await session.rollback()
+                failed_doc = await session.get(KnowledgeDocument, document_id)
+                if failed_doc and failed_doc.status != "indexed":
+                    failed_doc.status = "failed"
+                    failed_doc.status_detail = error_msg.splitlines()[0][:500] if error_msg else "Indexing failed"
+                    await session.commit()
+            except Exception as mark_err:  # noqa: BLE001
+                logger.warning("index_kb_document_task.mark_failed_error", error=str(mark_err))
             await _update_job_status(
                 session, job_id, "failed",
                 error_message=error_msg

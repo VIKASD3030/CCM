@@ -2,13 +2,14 @@
 // Inspired by Azure Portal, Linear, and Material Design 3.
 
 export const tokens = {
-  primary: '#1E3A8A',
-  primaryDark: '#172554',
-  primaryLight: '#2563EB',
-  accent: '#2563EB',
-  accentLight: '#3B82F6',
+  // CCM design red (see src/ccm/ui/ccm-ui.css --cx-red).
+  primary: '#C4232A',
+  primaryDark: '#A51D23',
+  primaryLight: '#D9474D',
+  accent: '#C4232A',
+  accentLight: '#D9474D',
   secondary: '#6B7280',
-  background: '#F8FAFC',
+  background: '#F4F5F7',
   paper: '#FFFFFF',
   border: '#E5E7EB',
   borderLight: '#F3F4F6',
