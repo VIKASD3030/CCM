@@ -6,6 +6,12 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
+  // CCM public API (Paris team contract, /api/v1). Locally: their mock_server.py.
+  // Set CCM_PUBLIC_API_URL / CCM_PUBLIC_API_TOKEN in frontend/.env to point at
+  // another server. No VITE_ prefix, so the token never reaches the browser bundle.
+  const ccmPublicApiUrl = env.CCM_PUBLIC_API_URL || 'http://127.0.0.1:5058';
+  const ccmPublicApiToken = env.CCM_PUBLIC_API_TOKEN || 'demo-token';
+
   return {
     base: '/master/',
     plugins: [
@@ -32,6 +38,19 @@ export default defineConfig(({ mode }) => {
       port: parseInt(env.VITE_PORT) || 5000,
       allowedHosts: ['erm-stag.systra.info'],
       proxy: {
+        // Must stay above '/api': the first matching prefix wins.
+        '/api/v1': {
+          target: ccmPublicApiUrl,
+          changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              // Add the token unless the caller sent one (the API console's token override).
+              if (!req.headers.authorization) {
+                proxyReq.setHeader('Authorization', `Bearer ${ccmPublicApiToken}`);
+              }
+            });
+          },
+        },
         '/api': {
           target: 'http://127.0.0.1:8000',
           changeOrigin: true,

@@ -68,6 +68,7 @@ class ModernHeader extends Component {
     else if (hash.includes('/master/view-user-logs')) title = 'User Logs'
     else if (hash.includes('/master/view-user-errors')) title = 'User Errors'
     else if (hash.includes('/master/api-test')) title = 'API Test'
+    else if (hash.includes('/ccm/api-console')) title = 'CCM API Console'
 
     this.setState({ pageTitle: title })
   }

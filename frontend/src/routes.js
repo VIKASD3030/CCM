@@ -9,6 +9,7 @@ const CcmProjectWorkspace = React.lazy(() => import('./ccm/views/project-workspa
 const CcmLetters = React.lazy(() => import('./ccm/views/letters'));
 const CcmReviewQueue = React.lazy(() => import('./ccm/views/review-queue'));
 const CcmKnowledgeBase = React.lazy(() => import('./ccm/views/knowledge-base'));
+const CcmApiConsole = React.lazy(() => import('./ccm/views/api-console'));
 
 
 const Project = React.lazy(() => import('./master/views/project-master'));
@@ -70,6 +71,8 @@ const routes = [
   { path: '/ccm/letters', name: 'Letters', component: CcmLetters, ownTopbar: true },
   { path: '/ccm/review', name: 'Review queue', component: CcmReviewQueue, ownTopbar: true },
   { path: '/ccm/knowledge', name: 'Knowledge Base', component: CcmKnowledgeBase, ownTopbar: true },
+  // Test bench for the CCM public API (/api/v1). Open at #/ccm/api-console.
+  { path: '/ccm/api-console', name: 'CCM API Console', component: CcmApiConsole, ownTopbar: true },
   { path: '/master/project-master', name: 'Project', component: Project },
   { path: '/master/project-master-details', name: 'Project Details', component: ProjectDetails },
   // { path: '/master/variation-order-master', name: 'Variation Order', component: VariationOrder },
