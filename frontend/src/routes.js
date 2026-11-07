@@ -69,7 +69,7 @@ const routes = [
   { path: '/ccm/projects', name: 'Projects', component: CcmProjects, ownTopbar: true },
   { path: '/ccm/project', name: 'Project workspace', component: CcmProjectWorkspace, ownTopbar: true },
   { path: '/ccm/letters', name: 'Letters', component: CcmLetters, ownTopbar: true },
-  { path: '/ccm/review', name: 'Review queue', component: CcmReviewQueue, ownTopbar: true },
+  { path: '/ccm/review', name: 'My drafts', component: CcmReviewQueue, ownTopbar: true },
   { path: '/ccm/knowledge', name: 'Knowledge Base', component: CcmKnowledgeBase, ownTopbar: true },
   // Test bench for the CCM public API (/api/v1). Open at #/ccm/api-console.
   { path: '/ccm/api-console', name: 'CCM API Console', component: CcmApiConsole, ownTopbar: true },

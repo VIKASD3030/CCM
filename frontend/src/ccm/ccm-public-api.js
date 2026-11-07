@@ -177,15 +177,16 @@ export async function send(method, path, options = {}) {
 /** Turns a status_url (absolute or /api/v1/...) into a path for send(). */
 export function apiPathOf(statusUrl) {
   let path = statusUrl;
+  // The real server may return an absolute URL on its own host. Keep only the
+  // path so the poll still goes through our proxy to the configured server,
+  // never to a host taken from a response.
   if (/^https?:\/\//i.test(statusUrl)) {
     const parsed = new URL(statusUrl);
-    if (parsed.origin !== window.location.origin) {
-      throw new Error(`Refusing a polling URL on another server: ${parsed.origin}`);
-    }
     path = parsed.pathname + parsed.search;
   }
-  if (!path.startsWith(`${API_BASE}/`)) throw new Error(`Unexpected polling URL: ${statusUrl}`);
-  return path.slice(API_BASE.length);
+  const at = path.indexOf(`${API_BASE}/`);
+  if (at < 0) throw new Error(`Unexpected polling URL: ${statusUrl}`);
+  return path.slice(at + API_BASE.length);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

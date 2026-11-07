@@ -16,8 +16,14 @@ export const ROUTES = {
   projects: '/ccm/projects',
   project: (id, tab) => `/ccm/project?id=${encodeURIComponent(id)}${tab ? `&tab=${tab}` : ''}`,
   letters: '/ccm/letters',
-  drafting: (letterId) => `/master/ai-drafting${letterId ? `?letter=${encodeURIComponent(letterId)}` : ''}`,
-  review: (draftId) => `/ccm/review${draftId ? `?draft=${encodeURIComponent(draftId)}` : ''}`,
+  lettersFor: (project) => `/ccm/letters?project=${encodeURIComponent(project)}`,
+  // A stored letter is identified by project + file on the CCM public API.
+  drafting: (project, file) => {
+    if (!project) return '/master/ai-drafting';
+    const q = `?project=${encodeURIComponent(project)}${file ? `&file=${encodeURIComponent(file)}` : ''}`;
+    return `/master/ai-drafting${q}`;
+  },
+  review: (project) => `/ccm/review${project ? `?project=${encodeURIComponent(project)}` : ''}`,
   knowledge: '/ccm/knowledge',
 };
 

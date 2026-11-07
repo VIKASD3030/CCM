@@ -1,183 +1,358 @@
 /**
- * Project workspace — Figma frame 04. The project's three folders (contract
- * volumes, outgoing letters, incoming letters), their indexing health,
- * drafting readiness and the project brief that every draft prompt includes.
+ * Project workspace for the CCM public API (/api/v1). Tabs:
+ *  - Setup:     checklist, readiness, plan + Apply / Deactivate
+ *  - Contracts: configured volumes, import a PDF or TXT per volume
+ *  - Letters:   import PDFs into a folder, list stored letters
+ *  - Rules:     edit/validate/save the TOML, versions, AI recommendations
  */
 import React from 'react';
-import CCM from '../ccm-api';
+import { ccmApi, unwrap } from '../ccm-public-api';
+import { errorText, readinessText, runJob } from '../project-setup';
 import {
-  PageTop, Btn, Card, Chip, Empty, Skeleton, Modal, StatusChip, DocStatus, openOriginal, go, ROUTES, toast, useQueryParam,
-  FOLDERS, folderOf, timeAgo, fmtDate, fmtDateTime, letterRef, letterSubject, urgencyTone, cap, isOpenLetter,
+  PageTop, Btn, Card, Chip, Empty, Skeleton, Modal, go, ROUTES, toast, useQueryParam, fmtDate, fmtDateTime,
 } from '../ui/kit';
-import { UploadDocumentsModal, Dropzone } from '../ui/modals';
+import { Dropzone } from '../ui/modals';
 
-const TABS = [{ key: 'overview', label: 'Overview' }, ...FOLDERS, { key: 'brief', label: 'Project brief' }];
+const TABS = [
+  { key: 'setup', label: 'Setup' },
+  { key: 'contracts', label: 'Contracts' },
+  { key: 'letters', label: 'Letters' },
+  { key: 'rules', label: 'Rules' },
+];
 
-function IndexHealth({ project }) {
-  const f = project.folders;
-  const contractChunks = f._chunks || 0;
-  const pct = contractChunks ? Math.round((100 * (f._chunks_with_clause || 0)) / contractChunks) : null;
-  const failed = FOLDERS.reduce((n, x) => n + (f[x.key]?.failed || 0), 0);
+const isPending = (p) => p && p.revision !== p.applied_revision;
+
+function Check({ ok, warn, children, action }) {
   return (
-    <Card title="Index health">
-      {FOLDERS.map((x) => {
-        const { total = 0, indexed = 0 } = f[x.key] || {};
-        const [text, color] = !total ? ['Empty', 'var(--cx-muted)']
-          : indexed < total ? [`${indexed} of ${total} indexed`, 'var(--cx-warn)'] : [`${indexed} indexed`, 'var(--cx-ok)'];
-        return <div className="cx-kv" key={x.key} style={{ fontSize: 13 }}><span style={{ color: 'var(--cx-ink)' }}>{x.label}</span><span style={{ color, fontWeight: 500, fontSize: 12 }}>{text}</span></div>;
-      })}
-      <hr className="cx-hr" />
-      <div className="cx-kv"><span>Clauses detected</span><b>{f.contract_volume?.clauses || 0}</b></div>
-      <div className="cx-kv"><span>Contract chunks with a clause number</span><b>{pct == null ? '—' : `${pct}%`}</b></div>
-      <div className="cx-kv"><span>Files that failed to index</span><b style={{ color: failed ? 'var(--cx-bad)' : undefined }}>{failed}</b></div>
-    </Card>
+    <div className="cx-check" style={{ fontSize: 13, justifyContent: 'space-between' }}>
+      <span className="cx-check" style={{ fontSize: 13 }}>
+        <span className={`cx-dot ${ok ? 'ok' : warn ? 'warn' : 'off'}`} />{children}
+      </span>
+      {action}
+    </div>
   );
 }
 
-function Readiness({ project, onOpenBrief }) {
+/* ─── Setup tab ─────────────────────────────────────────────────────────── */
+
+function SetupTab({ project, volumes, letterTotal, onTab, onChanged }) {
+  const [plan, setPlan] = React.useState(null);
+  const [planError, setPlanError] = React.useState(null);
+  const [embedLetters, setEmbedLetters] = React.useState(false);
+  const [embedClauses, setEmbedClauses] = React.useState(false);
+  const [busy, setBusy] = React.useState('');
+  const [confirmDeactivate, setConfirmDeactivate] = React.useState(false);
+
+  const loadPlan = React.useCallback(async () => {
+    const r = await ccmApi.rules.plan(project.project_id);
+    if (r.ok) { setPlan(r.data); setPlanError(null); } else setPlanError(errorText(r));
+  }, [project.project_id]);
+  React.useEffect(() => { loadPlan(); }, [loadPlan, project.revision]);
+
+  const imported = volumes ? volumes.filter((v) => v.text_available).length : 0;
+  const applied = !!project.applied_revision && !isPending(project);
+  const r = project.readiness || { ready: false, blockers: [], warnings: [] };
+
+  const apply = async () => {
+    setBusy('apply');
+    try {
+      const result = await runJob(await ccmApi.rules.apply(project.project_id, {
+        expected_revision: project.revision, embed_letters: embedLetters, embed_clauses: embedClauses,
+      }));
+      toast(result.readiness?.ready ? 'Rules applied. The project is ready for drafting.' : 'Rules applied. Check the remaining blockers.', 'success');
+      onChanged();
+    } catch (e) {
+      toast(`Apply failed: ${errorText(e)}`, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const deactivate = async () => {
+    setConfirmDeactivate(false);
+    setBusy('deactivate');
+    const res = await ccmApi.rules.deactivate(project.project_id, { expected_revision: project.revision });
+    setBusy('');
+    if (res.ok) { toast('Project deactivated. Apply again to reactivate it.', 'success'); onChanged(); } else toast(errorText(res), 'error');
+  };
+
   return (
-    <Card title="Drafting readiness" right={<b>{project.readiness?.percent || 0}%</b>}>
-      {(project.readiness?.checks || []).map((c) => (
-        <div className="cx-check" key={c.key} style={{ fontSize: 13 }}>
-          <span className={`cx-dot ${c.ok ? 'ok' : 'off'}`} />{c.label}
-        </div>
-      ))}
-      <Btn block onClick={onOpenBrief}>Open project brief</Btn>
-    </Card>
+    <div className="cx-row stack-md" style={{ gap: 24, alignItems: 'flex-start' }}>
+      <div className="cx-col cx-grow" style={{ gap: 16 }}>
+        <Card title="Setup checklist">
+          <Check ok>Project created with configuration</Check>
+          <Check ok={volumes && volumes.length > 0 && imported === volumes.length} warn={imported > 0}
+            action={<Btn size="sm" variant="ghost" onClick={() => onTab('contracts')}>Contracts</Btn>}>
+            Contract volumes imported: {volumes ? `${imported} of ${volumes.length}` : '…'}
+          </Check>
+          <Check ok={letterTotal > 0} action={<Btn size="sm" variant="ghost" onClick={() => onTab('letters')}>Letters</Btn>}>
+            Letters imported: {letterTotal ?? '…'}
+            {plan && letterTotal > 0 && <span className="cx-muted"> ({plan.incoming} incoming · {plan.outgoing} outgoing)</span>}
+          </Check>
+          {plan && plan.incoming > 0 && plan.outgoing === 0 && (
+            <span className="cx-s11 cx-muted" style={{ paddingLeft: 26 }}>
+              No outgoing letters yet. Import your side&apos;s earlier letters so drafts stay consistent with them.
+            </span>
+          )}
+          <Check ok={applied} action={<Btn size="sm" variant="ghost" onClick={() => onTab('rules')}>Rules</Btn>}>
+            {applied ? 'Rules applied' : project.applied_revision ? 'Rule changes not applied yet' : 'Rules not applied yet'}
+          </Check>
+          <hr className="cx-hr" />
+          <Check ok={r.ready}><b>{r.ready ? 'Ready for drafting' : 'Not ready for drafting'}</b></Check>
+        </Card>
+
+        <Card title="Apply rules" right={applied ? <Chip tone="ok">Active</Chip> : <Chip tone="warn">Pending</Chip>}>
+          <span className="cx-s12 cx-muted">
+            Apply activates the saved configuration and rebuilds the project&apos;s indexes. Run it after you import contracts or
+            change the rules. Importing letters does not need Apply.
+          </span>
+          {planError && <div className="cx-banner bad"><span className="cx-s12">{planError}</span></div>}
+          {plan ? (
+            <>
+              <div className="cx-kv"><span>Letters</span><b>{plan.letters} ({plan.incoming} in · {plan.outgoing} out · {plan.unknown_sender} unknown sender)</b></div>
+              <div className="cx-kv"><span>Contract volumes</span><b>{plan.volumes}</b></div>
+              <div className="cx-kv"><span>Clauses found</span><b>{plan.clauses}</b></div>
+              {plan.embeddings_enabled ? (
+                <>
+                  <label className="cx-check" style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={embedClauses} onChange={(e) => setEmbedClauses(e.target.checked)} />
+                    Build clause search index ({plan.clause_embed_todo} to embed, ~{plan.clause_embed_tokens} tokens)
+                  </label>
+                  <label className="cx-check" style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={embedLetters} onChange={(e) => setEmbedLetters(e.target.checked)} />
+                    Build letter search index ({plan.letters_embedded} done, ~{plan.letter_embed_tokens} tokens)
+                  </label>
+                  <span className="cx-s11 cx-muted">Search indexes use the server&apos;s AI service and may cost money. Token counts are estimates.</span>
+                </>
+              ) : <span className="cx-s12 cx-muted">Semantic search indexes are not enabled on this server.</span>}
+            </>
+          ) : !planError && <Skeleton h={60} />}
+          <div className="cx-toolbar">
+            <Btn onClick={() => setConfirmDeactivate(true)} disabled={!!busy || !project.applied_revision}>Deactivate</Btn>
+            <span className="cx-spacer" />
+            <Btn variant="primary" onClick={apply} disabled={!!busy}>{busy === 'apply' ? 'Applying…' : 'Apply'}</Btn>
+          </div>
+        </Card>
+      </div>
+
+      <div className="cx-col" style={{ width: 340, flex: 'none', gap: 20 }}>
+        <Card title="Readiness" right={<Chip tone={r.ready ? 'ok' : 'warn'}>{r.ready ? 'Ready' : 'Not ready'}</Chip>}>
+          {r.blockers.length === 0 && r.warnings.length === 0 && <span className="cx-s12 cx-muted">No issues.</span>}
+          {r.blockers.map((b) => <Check key={b}><span style={{ color: 'var(--cx-bad)' }}>{readinessText(b)}</span></Check>)}
+          {r.warnings.map((w) => <Check key={w} warn>{readinessText(w)}</Check>)}
+          <span className="cx-s11 cx-muted">Readiness checks the setup only. It doesn&apos;t test the server&apos;s AI or OCR services.</span>
+        </Card>
+        <Card title="Project">
+          <div className="cx-kv"><span>Project ID</span><b>{project.project_id}</b></div>
+          <div className="cx-kv"><span>Contract ID</span><b>{project.contract_id || '—'}</b></div>
+          {Object.entries(project.metadata || {}).filter(([, v]) => v).map(([k, v]) => (
+            <div className="cx-kv" key={k}><span>{k.replace(/_/g, ' ')}</span><b>{v}</b></div>
+          ))}
+          <hr className="cx-hr" />
+          {(project.parties || []).map((p) => (
+            <div className="cx-kv" key={p.key}><span>{p.role || p.key}</span><b>{p.label}{p.key === project.author_party ? ' (owner)' : ''}</b></div>
+          ))}
+        </Card>
+      </div>
+
+      {confirmDeactivate && (
+        <Modal title="Deactivate project?" size="sm" onClose={() => setConfirmDeactivate(false)}>
+          <span>Drafting, analysis, review and DOCX export stop for this project until you Apply again.</span>
+          <div className="cx-toolbar"><span className="cx-spacer" /><Btn onClick={() => setConfirmDeactivate(false)}>Cancel</Btn><Btn variant="primary" onClick={deactivate}>Deactivate</Btn></div>
+        </Modal>
+      )}
+    </div>
   );
 }
 
-function FolderTab({ folder, docs, onUploadFiles, onDelete, onReindex }) {
-  const [q, setQ] = React.useState('');
-  const [status, setStatus] = React.useState('');
-  const isContract = folder.key === 'contract_volume';
-  const colW = isContract ? 190 : 150;
-  const rows = docs
-    .filter((d) => !q.trim() || `${d.filename} ${d.ref_no || ''} ${d.subject || ''}`.toLowerCase().includes(q.trim().toLowerCase()))
-    .filter((d) => !status || d.status === status);
-  const needsReindex = (d) => d.status === 'failed'
-    || (d.status === 'indexed' && (d.status_detail || '').startsWith('Indexed for keyword'));
+/* ─── Contracts tab ─────────────────────────────────────────────────────── */
+
+function ContractsTab({ project, contracts, onChanged }) {
+  const [busy, setBusy] = React.useState(null);
+  const input = React.useRef(null);
+  const target = React.useRef(null);
+
+  const pick = (volume) => { target.current = volume; input.current?.click(); };
+  const upload = async (file) => {
+    const volume = target.current;
+    if (!file || !volume) return;
+    if (!/\.(pdf|txt)$/i.test(file.name)) { toast('Use a PDF or a UTF-8 TXT file.', 'error'); return; }
+    setBusy(volume.id);
+    try {
+      const result = await runJob(await ccmApi.contracts.importFile(project.project_id, volume.id, contracts.revision, file));
+      toast(result.state === 'skipped'
+        ? `${volume.title}: identical file already imported (skipped).`
+        : `${volume.title}: imported ${result.pages ?? '?'} pages, ${result.characters} characters.${result.apply_required ? ' Apply the rules to use it.' : ''}`, 'success');
+      onChanged();
+    } catch (e) {
+      toast(`${volume.title}: ${errorText(e)}`, 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!contracts) return <Skeleton h={160} />;
   return (
     <>
-      <div className="cx-toolbar">
-        <input className="cx-input" style={{ width: 280, maxWidth: '100%' }} value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder={isContract ? 'Search contract volumes' : 'Search by reference or subject'} aria-label={`Search ${folder.label}`} />
-        <select className="cx-select inline" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-          <option value="">Status: All</option><option value="indexed">Indexed</option><option value="processing">Processing</option><option value="failed">Failed</option>
-        </select>
-        <span className="cx-spacer" />
-        <span className="cx-s12 cx-muted">Folder rule: only {folder.label.toLowerCase()} go here</span>
-      </div>
-      {rows.length > 0 ? (
+      <span className="cx-s12 cx-muted">
+        Volumes come from the project configuration (Rules tab), listed in order of precedence. Each volume can be imported once;
+        for an amendment, add a new volume in the rules. Importing makes the rules pending until you Apply.
+      </span>
+      {contracts.volumes.length === 0 ? (
+        <Empty title="No contract volumes configured">Add volumes under <code>contract_documents.volumes</code> in the Rules tab.</Empty>
+      ) : (
         <div className="cx-table-wrap">
           <table className="cx-table">
-            <thead>
-              <tr>
-                <th>{isContract ? 'Document' : 'Reference'}</th>
-                {isContract ? <th>Volume</th> : <th>Subject</th>}
-                {!isContract && <th>Date</th>}
-                {isContract && <th>Pages</th>}
-                {isContract && <th>Clauses</th>}
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
+            <thead><tr><th>Volume</th><th>File</th><th>First printed page</th><th>Status</th><th /></tr></thead>
             <tbody>
-              {rows.map((d) => (
-                <tr key={d.id}>
-                  <td>
-                    <div className="cx-ellipsis" style={{ maxWidth: colW }} title={d.filename}>{isContract ? d.filename : (d.ref_no || d.filename)}</div>
-                    {!isContract && d.ref_no && <div className="cx-s11 cx-muted cx-ellipsis" style={{ maxWidth: colW }}>{d.filename}</div>}
-                    {d.status === 'failed' && d.status_detail && (
-                      <div className="cx-s11" style={{ color: 'var(--cx-bad)', maxWidth: 300 }}>{d.status_detail}</div>
+              {contracts.volumes.map((v) => (
+                <tr key={v.id}>
+                  <td><b>{v.title}</b><div className="cx-s11 cx-muted">{v.id}</div></td>
+                  <td className="cx-s12">{v.file}</td>
+                  <td className="num">{v.page_start ?? '—'}</td>
+                  <td>{v.text_available ? <Chip tone="ok">Imported</Chip> : <Chip tone="warn">Missing</Chip>}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {!v.text_available && (
+                      <Btn size="sm" variant="primary" onClick={() => pick(v)} disabled={!!busy}>
+                        {busy === v.id ? 'Importing…' : 'Upload PDF / TXT'}
+                      </Btn>
                     )}
-                  </td>
-                  {isContract
-                    ? <td style={{ whiteSpace: 'nowrap' }}>{d.volume_label || '–'}</td>
-                    : <td><div className="cx-ellipsis" style={{ maxWidth: colW }} title={d.subject || ''}>{d.subject || <span className="cx-muted">–</span>}</div></td>}
-                  {!isContract && <td style={{ whiteSpace: 'nowrap' }} title={fmtDateTime(d.uploaded_at)}>{d.doc_date ? fmtDate(d.doc_date) : <span className="cx-muted">{timeAgo(d.uploaded_at)}</span>}</td>}
-                  {isContract && <td className="num">{d.page_count ?? '–'}</td>}
-                  {isContract && <td className="num">{d.status === 'indexed' ? d.clause_count : '–'}</td>}
-                  <td><DocStatus doc={d} /></td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <Btn size="sm" variant="ghost" style={{ padding: '4px 6px' }} onClick={() => openOriginal(`/api/knowledge/documents/${d.id}/file`)} aria-label={`View original of ${d.filename}`}>View</Btn>
-                    {needsReindex(d) && <Btn size="sm" variant="ghost" style={{ padding: '4px 6px' }} onClick={() => onReindex(d)} aria-label={`Re-index ${d.filename}`}>Re-index</Btn>}
-                    <Btn size="sm" variant="ghost" style={{ padding: '4px 6px' }} onClick={() => onDelete(d)} aria-label={`Delete ${d.filename}`}>Delete</Btn>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      ) : docs.length > 0 ? (
-        <Empty title="No documents match these filters" />
-      ) : null}
-      <Dropzone onFiles={onUploadFiles} title={`Drop ${folder.label.toLowerCase()} here`}
-        hint={`PDF, DOCX, TXT or scanned images, or a ZIP to import many at once. Files are tagged to this project → ${folder.label}; scans are read with OCR.`} />
+      )}
+      <input ref={input} type="file" hidden accept=".pdf,.txt" onChange={(e) => { upload(e.target.files[0]); e.target.value = ''; }} />
     </>
   );
 }
 
-function BriefTab({ project, onSaved }) {
-  const [brief, setBrief] = React.useState(project.brief || '');
-  const [verified, setVerified] = React.useState(!!project.brief_verified);
-  const [busy, setBusy] = React.useState(false);
-  const dirty = brief !== (project.brief || '') || verified !== !!project.brief_verified;
-  const save = async () => {
-    setBusy(true);
-    try {
-      await CCM.projects.update(project.id, { brief, brief_verified: verified });
-      toast('Project brief saved', 'success');
-      onSaved();
-    } catch (e) {
-      toast(`Couldn't save: ${e.message}`, 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Card title="Project brief" right={project.brief_verified ? <Chip tone="ok">Verified</Chip> : <Chip tone="warn">Not verified</Chip>}>
-      <span className="cx-s12 cx-muted">
-        Key facts every reply for this project should respect: parties, contract number, key dates, notice periods,
-        dispute clauses and positions already taken. It is added to the AI prompt for every draft.
-      </span>
-      <textarea className="cx-textarea" style={{ minHeight: 260 }} value={brief} onChange={(e) => setBrief(e.target.value)}
-        placeholder={'Employer: …\nContractor: …\nContract no.: …\nCommencement date: …\nNotice period for claims: 28 days (Cl 20.1)\nPosition on EOT: …'} aria-label="Project brief" />
-      <label className="cx-check" style={{ cursor: 'pointer' }}>
-        <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
-        I have checked these facts against the contract
-      </label>
-      <div className="cx-toolbar"><span className="cx-spacer" /><Btn variant="primary" onClick={save} disabled={busy || !dirty}>{busy ? 'Saving…' : 'Save brief'}</Btn></div>
-    </Card>
-  );
+/* ─── Letters tab ───────────────────────────────────────────────────────── */
+
+const INCOMING_RE = /^(incoming|inbound|received|in)([-_].*)?$/i;
+const OUTGOING_RE = /^(outgoing|outbound|sent|out|replies)([-_].*)?$/i;
+
+/** Label and hint for an import folder key from the project configuration. */
+function folderInfo(key) {
+  if (INCOMING_RE.test(key)) return { title: 'Incoming letters', hint: 'Letters received from the other parties.', order: 0 };
+  if (OUTGOING_RE.test(key)) return { title: 'Outgoing letters', hint: 'Letters your side has sent, including earlier replies. Drafting uses them to stay consistent.', order: 1 };
+  return { title: `Folder: ${key}`, hint: 'A folder from the project configuration.', order: 2 };
 }
 
-function OverviewTab({ project, letters, onTab }) {
-  const open = letters.filter(isOpenLetter).slice(0, 6);
+const OUTGOING_SNIPPET = `[corpus]
+dirs = [
+  { path = "<data folder>/letters/incoming", folder = "incoming" },
+  { path = "<data folder>/letters/outgoing", folder = "outgoing" },
+]`;
+
+function LettersTab({ project, onChanged }) {
+  const [options, setOptions] = React.useState(null);
+  const [optionsError, setOptionsError] = React.useState(null);
+  const [pages, setPages] = React.useState('');
+  const [busy, setBusy] = React.useState(''); // folder key being imported
+  const [lastImport, setLastImport] = React.useState(null);
+  const [letters, setLetters] = React.useState(null);
+  const [q, setQ] = React.useState('');
+  const [direction, setDirection] = React.useState('all');
+
+  React.useEffect(() => {
+    ccmApi.imports.options(project.project_id).then((r) => {
+      if (!r.ok) { setOptionsError(errorText(r)); return; }
+      setOptions(r.data);
+    });
+  }, [project.project_id, project.revision]);
+
+  const folders = (options?.folders || []).map((f) => ({ key: f.key, ...folderInfo(f.key) })).sort((a, b) => a.order - b.order);
+  const hasOutgoing = folders.some((f) => OUTGOING_RE.test(f.key));
+
+  const loadLetters = React.useCallback(async () => {
+    const r = await ccmApi.letters.list(project.project_id, { q, direction, page_size: 100 });
+    setLetters(r.ok ? r.data : { error: errorText(r) });
+  }, [project.project_id, q, direction]);
+  React.useEffect(() => {
+    const t = setTimeout(loadLetters, 300); // wait for typing to pause
+    return () => clearTimeout(t);
+  }, [loadLetters]);
+
+  const upload = async (folder, files) => {
+    const pdfs = files.filter((f) => /\.pdf$/i.test(f.name));
+    if (pdfs.length < files.length) toast(`${files.length - pdfs.length} file(s) skipped: only PDFs can be imported.`, 'error');
+    if (!pdfs.length) return;
+    const tooBig = pdfs.reduce((n, f) => n + f.size, 0) > (options?.max_upload_mb || 200) * 1048576;
+    if (tooBig) { toast(`The files exceed the ${options.max_upload_mb} MiB upload limit. Import them in smaller batches.`, 'error'); return; }
+    setBusy(folder.key);
+    try {
+      const result = await runJob(await ccmApi.imports.upload(project.project_id, { folder: folder.key, pages: pages.trim(), files: pdfs }));
+      setLastImport({ ...result, title: folder.title });
+      toast(`${folder.title}: ${result.imported} imported, ${result.skipped} skipped, ${result.failed} failed.`, result.failed ? 'error' : 'success');
+      loadLetters();
+      onChanged();
+    } catch (e) {
+      toast(`Import failed: ${errorText(e)}`, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <>
-      <div className="cx-fstats">
-        {FOLDERS.map((f) => (
-          <button key={f.key} type="button" className="cx-fstat" style={{ border: '1px solid var(--cx-line)', background: 'var(--cx-panel)', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}
-            onClick={() => onTab(f.key)}>
-            <b>{project.folders[f.key]?.total || 0}</b><span>{f.label}</span>
-          </button>
-        ))}
-      </div>
-      <Card title="Open letters on this project" right={<Btn variant="ghost" size="sm" onClick={() => go(ROUTES.letters)}>All letters</Btn>}>
-        {open.length === 0 ? <span className="cx-s12 cx-muted">No open letters on this project.</span> : (
+      <Card title="Import letters"
+        right={options && (
+          <div className="cx-field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <label htmlFor="imp-pages" style={{ whiteSpace: 'nowrap' }}>Pages to read</label>
+            <input id="imp-pages" className="cx-input" style={{ width: 110 }} value={pages} onChange={(e) => setPages(e.target.value)} placeholder={options.default_pages} />
+          </div>
+        )}>
+        {optionsError && <div className="cx-banner bad"><span className="cx-s12">{optionsError}</span></div>}
+        {options && (
+          <>
+            <span className="cx-s12 cx-muted">
+              Import both sides of the correspondence. CCM decides each letter&apos;s direction from its letterhead and the parties in the
+              configuration, and drafting uses earlier outgoing letters to stay consistent with positions already taken.
+            </span>
+            {!options.ocr_configured && <div className="cx-banner"><span className="cx-s12">OCR isn&apos;t configured on the server, so scanned PDFs may import without text.</span></div>}
+            <div className="cx-row stack-md" style={{ gap: 12, alignItems: 'stretch' }}>
+              {folders.map((f) => (
+                <div key={f.key} className="cx-col cx-grow" style={{ gap: 6 }}>
+                  <b className="cx-s12">{f.title}</b>
+                  {busy === f.key ? (
+                    <div className="cx-drop"><b>Importing…</b><span className="cx-s12 cx-muted">OCR can take a while for large files.</span></div>
+                  ) : (
+                    <Dropzone onFiles={(files) => (busy ? toast('Wait for the current import to finish.', 'error') : upload(f, files))}
+                      title={`Drop ${f.title.toLowerCase()} here`} hint={`${f.hint} PDF only, up to ${options.max_upload_mb} MiB per import.`} />
+                  )}
+                </div>
+              ))}
+              {!hasOutgoing && (
+                <div className="cx-col cx-grow" style={{ gap: 6 }}>
+                  <b className="cx-s12">Outgoing letters</b>
+                  <div className="cx-banner" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+                    <span className="cx-s12">This project has no outgoing folder yet. Add one to <code>corpus.dirs</code> in the Rules tab, save and Apply:</span>
+                    <pre className="cx-code" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{OUTGOING_SNIPPET}</pre>
+                    <span className="cx-s11">The path must be inside your data folder. Ask the operator if you&apos;re unsure.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <span className="cx-s11 cx-muted">Files with the same name are skipped. Originals are never overwritten.</span>
+          </>
+        )}
+        {!options && !optionsError && <Skeleton h={80} />}
+        {lastImport && <b className="cx-s12">Last import: {lastImport.title}</b>}
+        {lastImport && (
           <div className="cx-table-wrap">
             <table className="cx-table">
-              <thead><tr><th>Ref</th><th>Subject</th><th>Urgency</th><th>Received</th><th>Status</th><th /></tr></thead>
+              <thead><tr><th>File</th><th>Result</th><th>Pages</th><th>Characters</th><th>Detail</th></tr></thead>
               <tbody>
-                {open.map((l) => (
-                  <tr key={l.id} className="clickable" onClick={() => go(ROUTES.drafting(l.id))}>
-                    <td className="cx-s12">{letterRef(l)}</td>
-                    <td><div className="cx-ellipsis" style={{ maxWidth: 280 }}>{letterSubject(l)}</div></td>
-                    <td><Chip tone={urgencyTone(l.urgency)}>{cap(l.urgency || 'Pending')}</Chip></td>
-                    <td>{timeAgo(l.received_at)}</td>
-                    <td><StatusChip status={l.status} /></td>
-                    <td><Btn size="sm" onClick={(e) => { e.stopPropagation(); go(ROUTES.drafting(l.id)); }}>Draft</Btn></td>
+                {lastImport.rows.map((row) => (
+                  <tr key={row.name}>
+                    <td className="cx-s12">{row.name}</td>
+                    <td><Chip tone={row.state === 'imported' ? 'ok' : row.state === 'failed' ? 'bad' : 'gray'}>{row.state}</Chip></td>
+                    <td className="num">{row.pages ?? '—'}</td>
+                    <td className="num">{row.chars ?? '—'}</td>
+                    <td className="cx-s12 cx-muted">{row.detail}</td>
                   </tr>
                 ))}
               </tbody>
@@ -185,186 +360,251 @@ function OverviewTab({ project, letters, onTab }) {
           </div>
         )}
       </Card>
+
+      <div className="cx-toolbar">
+        <input className="cx-input" style={{ width: 280, maxWidth: '100%' }} value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Search subject, reference, sender" aria-label="Search letters" />
+        <select className="cx-select inline" value={direction} onChange={(e) => setDirection(e.target.value)} aria-label="Direction">
+          <option value="all">Direction: All</option><option value="incoming">Incoming</option><option value="outgoing">Outgoing</option><option value="other">Other</option>
+        </select>
+        <span className="cx-spacer" />
+        {letters && !letters.error && <span className="cx-s12 cx-muted">{letters.total} letter{letters.total === 1 ? '' : 's'}{letters.total > letters.letters.length ? ` (showing ${letters.letters.length})` : ''}</span>}
+      </div>
+      {!letters ? <Skeleton h={160} /> : letters.error ? (
+        <div className="cx-banner bad"><span className="cx-s12">{letters.error}</span></div>
+      ) : letters.letters.length === 0 ? (
+        <Empty title={q || direction !== 'all' ? 'No letters match' : 'No letters yet'}>Import the project&apos;s correspondence above.</Empty>
+      ) : (
+        <div className="cx-table-wrap">
+          <table className="cx-table">
+            <thead><tr><th>Reference</th><th>Subject</th><th>Sender</th><th>Date</th><th>Direction</th></tr></thead>
+            <tbody>
+              {letters.letters.map((l) => (
+                <tr key={l.file}>
+                  <td><div className="cx-ellipsis" style={{ maxWidth: 180 }}>{l.reference || l.file}</div>{l.reference && <div className="cx-s11 cx-muted">{l.file}</div>}</td>
+                  <td><div className="cx-ellipsis" style={{ maxWidth: 320 }} title={l.subject}>{l.subject || <span className="cx-muted">—</span>}</div></td>
+                  <td className="cx-s12">{l.sender || '—'}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{l.date ? fmtDate(l.date) : '—'}</td>
+                  <td>{l.is_incoming ? <Chip tone="blue">Incoming</Chip> : l.is_outgoing ? <Chip tone="gray">Outgoing</Chip> : <Chip>Other</Chip>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }
 
+/* ─── Rules tab ─────────────────────────────────────────────────────────── */
+
+function RulesTab({ project, onChanged }) {
+  const [rules, setRules] = React.useState(null);
+  const [text, setText] = React.useState('');
+  const [message, setMessage] = React.useState(null); // { tone, text }
+  const [busy, setBusy] = React.useState('');
+  const [versions, setVersions] = React.useState(null);
+  const [instructions, setInstructions] = React.useState('');
+  const [proposal, setProposal] = React.useState(null);
+
+  const load = React.useCallback(async () => {
+    const [r, v] = await Promise.all([ccmApi.rules.get(project.project_id), ccmApi.rules.versions(project.project_id)]);
+    if (r.ok) { setRules(r.data); setText(r.data.configuration_toml); } else setMessage({ tone: 'bad', text: errorText(r) });
+    setVersions(v.ok ? v.data.versions : []);
+  }, [project.project_id]);
+  React.useEffect(() => { load(); }, [load]);
+
+  const dirty = rules && text !== rules.configuration_toml;
+  const fileInput = React.useRef(null);
+
+  const loadFile = async (file) => {
+    if (!file) return;
+    if (file.size > 256 * 1024) { setMessage({ tone: 'bad', text: 'The file is larger than 256 KiB.' }); return; }
+    setText(await file.text());
+    setMessage({ tone: 'info', text: `Loaded ${file.name} into the editor. It replaces the whole configuration. Validate, Save, then Apply.` });
+  };
+
+  const validate = async () => {
+    setBusy('validate');
+    const r = await ccmApi.rules.validate(project.project_id, { configuration_toml: text });
+    setBusy('');
+    setMessage(r.ok ? { tone: 'ok', text: 'The configuration is valid.' } : { tone: 'bad', text: errorText(r) });
+  };
+
+  const save = async () => {
+    setBusy('save');
+    const r = await ccmApi.rules.save(project.project_id, { configuration_toml: text, expected_revision: rules.revision });
+    setBusy('');
+    if (r.ok) {
+      setMessage({ tone: 'ok', text: 'Saved. The previous version is archived. Apply the rules on the Setup tab to activate them.' });
+      await load();
+      onChanged();
+    } else if (r.data?.error?.code === 'revision_conflict') {
+      setMessage({ tone: 'bad', text: 'Someone else changed the rules since you opened them. Copy your edits, reload, and save again.' });
+    } else {
+      setMessage({ tone: 'bad', text: errorText(r) });
+    }
+  };
+
+  const loadVersion = async (version) => {
+    const r = await ccmApi.rules.version(project.project_id, version);
+    if (!r.ok) { toast(errorText(r), 'error'); return; }
+    setText(r.data.configuration_toml);
+    setMessage({ tone: 'info', text: `Loaded version ${version} into the editor. Save it to restore it, then Apply.` });
+  };
+
+  const recommend = async () => {
+    setBusy('recommend');
+    setProposal(null);
+    try {
+      const result = await runJob(await ccmApi.rules.recommend(project.project_id, { expected_revision: rules.revision, instructions }));
+      setProposal(result);
+    } catch (e) {
+      toast(`Recommendation failed: ${errorText(e)}`, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  if (!rules) return message ? <div className="cx-banner bad"><span className="cx-s12">{message.text}</span></div> : <Skeleton h={320} />;
+
+  return (
+    <div className="cx-row stack-md" style={{ gap: 24, alignItems: 'flex-start' }}>
+      <div className="cx-col cx-grow" style={{ gap: 12 }}>
+        <div className="cx-toolbar">
+          <span className="cx-s12 cx-muted">Revision {rules.revision.slice(0, 12)}…</span>
+          {isPending(project) ? <Chip tone="warn">Not applied</Chip> : <Chip tone="ok">Applied</Chip>}
+          {dirty && <Chip tone="blue">Unsaved changes</Chip>}
+          <span className="cx-spacer" />
+          <Btn onClick={() => fileInput.current?.click()} disabled={!!busy}>Load file</Btn>
+          <input ref={fileInput} type="file" hidden accept=".toml,text/plain" onChange={(e) => { loadFile(e.target.files[0]); e.target.value = ''; }} />
+          <Btn onClick={() => { setText(rules.configuration_toml); setMessage(null); }} disabled={!dirty || !!busy}>Discard</Btn>
+          <Btn onClick={validate} disabled={!!busy}>{busy === 'validate' ? 'Checking…' : 'Validate'}</Btn>
+          <Btn variant="primary" onClick={save} disabled={!dirty || !!busy}>{busy === 'save' ? 'Saving…' : 'Save'}</Btn>
+        </div>
+        {message && <div className={`cx-banner ${message.tone === 'bad' ? 'bad' : 'info'}`}><span className="cx-s12">{message.text}</span></div>}
+        <textarea className="cx-textarea cx-code" style={{ minHeight: 560 }} value={text} spellCheck={false}
+          onChange={(e) => setText(e.target.value)} aria-label="Project configuration TOML" />
+      </div>
+
+      <div className="cx-col" style={{ width: 340, flex: 'none', gap: 20 }}>
+        <Card title="AI rule suggestions">
+          <span className="cx-s12 cx-muted">
+            Samples the contract and letters and proposes classification, business rules and drafting guidance. Nothing is saved
+            until you accept and save it.
+          </span>
+          <textarea className="cx-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={4000}
+            placeholder="Optional guidance, e.g. focus on delay and payment claims" aria-label="Instructions for the suggestions" />
+          <Btn block onClick={recommend} disabled={!!busy || dirty} title={dirty ? 'Save or discard your edits first' : undefined}>
+            {busy === 'recommend' ? 'Analysing sources…' : 'Suggest rules'}
+          </Btn>
+        </Card>
+        <Card title="Version history">
+          {!versions ? <Skeleton h={40} /> : versions.length === 0 ? <span className="cx-s12 cx-muted">No earlier versions yet.</span> : (
+            versions.map((v) => (
+              <div className="cx-kv" key={v.version} style={{ alignItems: 'center' }}>
+                <span title={`${v.bytes} bytes, saved by ${v.saved_by}`}>{fmtDateTime(v.created_at)}</span>
+                <Btn size="sm" variant="ghost" onClick={() => loadVersion(v.version)}>Load</Btn>
+              </div>
+            ))
+          )}
+        </Card>
+      </div>
+
+      {proposal && (
+        <Modal title="Suggested rules" size="lg" onClose={() => setProposal(null)}>
+          {proposal.warnings?.length > 0 && <div className="cx-banner"><span className="cx-s12">{proposal.warnings.join(' · ')}</span></div>}
+          <div className="cx-col" style={{ gap: 6 }}>
+            {(proposal.reasons || []).map((r, i) => (
+              // eslint-disable-next-line react/no-array-index-key
+              <div key={i} className="cx-s12"><b>{r.section}</b>: {r.explanation} <span className="cx-muted">({(r.source_ids || []).join(', ')})</span></div>
+            ))}
+          </div>
+          <textarea className="cx-textarea cx-code" style={{ minHeight: 360 }} readOnly value={proposal.configuration_toml} aria-label="Suggested TOML" />
+          <span className="cx-s11 cx-muted">Based on sampled excerpts only. Check the suggestions against the full contract. Comments in the TOML are not kept.</span>
+          <div className="cx-toolbar">
+            <span className="cx-spacer" />
+            <Btn onClick={() => setProposal(null)}>Close</Btn>
+            <Btn variant="primary" disabled={proposal.base_revision !== rules.revision}
+              title={proposal.base_revision !== rules.revision ? 'The rules changed since this suggestion was made' : undefined}
+              onClick={() => {
+                setText(proposal.configuration_toml);
+                setProposal(null);
+                setMessage({ tone: 'info', text: 'The suggestion is in the editor. Review it, then Save and Apply.' });
+              }}>Use in editor</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ─── Page ──────────────────────────────────────────────────────────────── */
+
 export default function ProjectWorkspace() {
   const id = useQueryParam('id');
   const tabParam = useQueryParam('tab');
-  const tab = TABS.some((t) => t.key === tabParam) ? tabParam : 'overview';
+  const tab = TABS.some((t) => t.key === tabParam) ? tabParam : 'setup';
   const [project, setProject] = React.useState(null);
-  const [docs, setDocs] = React.useState([]);
-  const [letters, setLetters] = React.useState([]);
-  const [projects, setProjects] = React.useState([]);
-  const [lastSync, setLastSync] = React.useState(null);
+  const [contracts, setContracts] = React.useState(null);
+  const [letterTotal, setLetterTotal] = React.useState(null);
   const [error, setError] = React.useState(null);
-  const [uploadOpen, setUploadOpen] = React.useState(false);
-  const [confirmDelete, setConfirmDelete] = React.useState(null);
-  const [syncing, setSyncing] = React.useState(false);
 
   const load = React.useCallback(async () => {
     if (!id) return;
-    try {
-      const [p, d, l] = await Promise.all([
-        CCM.projects.get(id),
-        CCM.knowledge.list({ project_id: id, limit: 200 }),
-        CCM.letters.list(null, null, id, 200),
-      ]);
-      setProject(p.project);
-      setDocs(d.documents || []);
-      setLetters(l.letters || []);
-      setError(null);
-    } catch (e) {
-      setError(e.message);
-    }
+    const [p, c, l] = await Promise.all([
+      ccmApi.projects.get(id),
+      ccmApi.contracts.list(id),
+      ccmApi.letters.list(id, { page_size: 1 }),
+    ]);
+    if (!p.ok) { setError(errorText(p)); return; }
+    setProject(unwrap(p));
+    setContracts(c.ok ? c.data : { revision: p.data.revision, volumes: [] });
+    setLetterTotal(l.ok ? l.data.total : null);
+    setError(null);
   }, [id]);
 
-  React.useEffect(() => {
-    setProject(null);
-    load();
-    CCM.projects.list().then((d) => setProjects(d.projects || [])).catch(() => {});
-    if (id) CCM.projects.syncLogs(id).then((d) => setLastSync((d.logs || [])[0] || null)).catch(() => {});
-  }, [id, load]);
-
-  // Refresh while documents are still being indexed.
-  const processing = docs.some((d) => d.status === 'processing');
-  React.useEffect(() => {
-    if (!processing) return undefined;
-    const t = setInterval(load, 4000);
-    return () => clearInterval(t);
-  }, [processing, load]);
+  React.useEffect(() => { setProject(null); setError(null); load(); }, [id, load]);
 
   const setTab = (key) => go(ROUTES.project(id, key));
-
-  const uploadFiles = async (files, folderKey) => {
-    let ok = 0;
-    let duplicates = 0;
-    for (const file of files) {
-      try {
-        if (/\.zip$/i.test(file.name)) {
-          // eslint-disable-next-line no-await-in-loop
-          const r = await CCM.knowledge.importZip(file, id, folderKey);
-          ok += r.imported;
-          duplicates += r.duplicates.length;
-          if (r.errors.length) toast(`${r.errors.length} file(s) in ${file.name} couldn't be imported: ${r.errors[0].error}`, 'error');
-        } else {
-          // eslint-disable-next-line no-await-in-loop
-          const r = await CCM.knowledge.uploadToFolder(file, id, folderKey);
-          if (r.status === 'duplicate') duplicates += 1; else ok += 1;
-        }
-      } catch (e) {
-        toast(`${file.name}: ${e.message}`, 'error');
-      }
-    }
-    if (ok || duplicates) {
-      toast(`${ok} file${ok === 1 ? '' : 's'} uploaded${duplicates ? `, ${duplicates} already in the project (skipped)` : ''}. Indexing runs in the background.`, 'success');
-    }
-    load();
-  };
-
-  const reindex = async (d) => {
-    try {
-      await CCM.knowledge.reindex(d.id);
-      toast(`Re-indexing ${d.filename}`, 'success');
-      load();
-    } catch (e) {
-      toast(`Couldn't re-index: ${e.message}`, 'error');
-    }
-  };
-
-  const doDelete = async () => {
-    const d = confirmDelete;
-    setConfirmDelete(null);
-    try {
-      await CCM.knowledge.delete(d.id);
-      toast(`${d.filename} deleted`, 'success');
-      load();
-    } catch (e) {
-      toast(`Couldn't delete: ${e.message}`, 'error');
-    }
-  };
-
-  const sync = async () => {
-    setSyncing(true);
-    try {
-      await CCM.projects.sync(id);
-      toast('SharePoint sync started. New files will appear in the folders.', 'success');
-    } catch (e) {
-      toast(e.message, 'error');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   if (!id) {
     return (<><PageTop crumbs={[{ label: 'Projects', to: ROUTES.projects }]} title="Project" /><div className="cx-content"><Empty title="No project selected" action={<Btn onClick={() => go(ROUTES.projects)}>Open projects</Btn>} /></div></>);
   }
 
-  const folder = folderOf(tab);
-  const count = (key) => project?.folders?.[key]?.total ?? 0;
+  const missing = contracts ? contracts.volumes.filter((v) => !v.text_available).length : 0;
 
   return (
     <>
-      <PageTop crumbs={[{ label: 'Projects', to: ROUTES.projects }, { label: project?.name || '…' }]} title={project?.name || 'Loading…'}
-        actions={(
-          <>
-            <Btn onClick={sync} disabled={!project?.sharepoint_site_id || syncing}
-              title={project?.sharepoint_site_id ? 'Pull new files from the project SharePoint library' : 'No SharePoint site is linked to this project'}>
-              {syncing ? 'Starting…' : 'Sync SharePoint'}
-            </Btn>
-            <Btn variant="primary" onClick={() => setUploadOpen(true)} disabled={!project}>Upload documents</Btn>
-          </>
-        )} />
+      <PageTop crumbs={[{ label: 'Projects', to: ROUTES.projects }, { label: project?.name || id }]} title={project?.name || (error ? id : 'Loading…')}
+        actions={project && (project.readiness?.ready ? <Chip tone="ok">Ready for drafting</Chip> : <Chip tone="warn">Setup incomplete</Chip>)} />
       <div className="cx-content">
-        {error && <div className="cx-banner bad"><b>Couldn't load this project.</b><span className="cx-s12">{error}</span></div>}
-        {!project ? <Skeleton h={320} /> : (
+        {error && <div className="cx-banner bad"><b>Couldn&apos;t load this project.</b><span className="cx-s12">{error}</span></div>}
+        {!project ? (!error && <Skeleton h={320} />) : (
           <>
-            <div className="cx-toolbar" style={{ gap: 8 }}>
-              {project.client_name && <Chip tone="gray">{project.client_name}</Chip>}
-              <Chip tone="ok">{cap(project.status)}</Chip>
-              {project.master_id != null && <Chip tone="blue">Master link: {project.project_code || `#${project.master_id}`}</Chip>}
-              <span className="cx-spacer" />
-              <span className="cx-s12 cx-muted">
-                {lastSync ? `Last sync: ${fmtDateTime(lastSync.last_synced_at)} (${lastSync.sync_status})` : project.sharepoint_site_id ? 'Not synced yet' : 'Manual uploads'}
-              </span>
-            </div>
-
-            <div className="cx-row stack-md" style={{ gap: 24, alignItems: 'flex-start' }}>
-              <div className="cx-col cx-grow" style={{ gap: 16 }}>
-                <div className="cx-tabs" role="tablist">
-                  {TABS.map((t) => (
-                    <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`cx-tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>
-                      {t.label}{folderOf(t.key) && <span className="n">{count(t.key)}</span>}
-                    </button>
-                  ))}
-                </div>
-                {tab === 'overview' && <OverviewTab project={project} letters={letters} onTab={setTab} />}
-                {tab === 'brief' && <BriefTab key={project.id} project={project} onSaved={load} />}
-                {folder && (
-                  <FolderTab folder={folder} docs={docs.filter((d) => d.document_type === folder.key)}
-                    onUploadFiles={(files) => uploadFiles(files, folder.key)} onDelete={setConfirmDelete} onReindex={reindex} />
-                )}
+            {isPending(project) && tab !== 'setup' && (
+              <div className="cx-banner">
+                <span className="cx-s12">The rules have changes that aren&apos;t applied yet. Drafting stays blocked until you Apply.</span>
+                <span className="cx-spacer" />
+                <Btn size="sm" onClick={() => setTab('setup')}>Go to Apply</Btn>
               </div>
-              <div className="cx-col" style={{ width: 320, flex: 'none', gap: 20 }}>
-                <IndexHealth project={project} />
-                <Readiness project={project} onOpenBrief={() => setTab('brief')} />
-              </div>
+            )}
+            <div className="cx-tabs" role="tablist">
+              {TABS.map((t) => (
+                <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`cx-tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>
+                  {t.label}
+                  {t.key === 'contracts' && missing > 0 && <span className="n">{missing}</span>}
+                  {t.key === 'letters' && letterTotal != null && <span className="n">{letterTotal}</span>}
+                </button>
+              ))}
             </div>
+            {tab === 'setup' && <SetupTab project={project} volumes={contracts?.volumes} letterTotal={letterTotal} onTab={setTab} onChanged={load} />}
+            {tab === 'contracts' && <ContractsTab project={project} contracts={contracts} onChanged={load} />}
+            {tab === 'letters' && <LettersTab project={project} onChanged={load} />}
+            {tab === 'rules' && <RulesTab key={project.project_id} project={project} onChanged={load} />}
           </>
         )}
       </div>
-      {uploadOpen && (
-        <UploadDocumentsModal projects={projects.length ? projects : project ? [project] : []} initialProjectId={id}
-          initialFolder={folder?.key || 'contract_volume'} onClose={() => { setUploadOpen(false); load(); }}
-          onUploaded={() => load()} />
-      )}
-      {confirmDelete && (
-        <Modal title="Delete document?" size="sm" onClose={() => setConfirmDelete(null)}>
-          <span>{confirmDelete.filename} and its indexed text will be removed from this project. Drafts can no longer cite it.</span>
-          <div className="cx-toolbar"><span className="cx-spacer" /><Btn onClick={() => setConfirmDelete(null)}>Cancel</Btn><Btn variant="primary" onClick={doDelete}>Delete</Btn></div>
-        </Modal>
-      )}
     </>
   );
 }
