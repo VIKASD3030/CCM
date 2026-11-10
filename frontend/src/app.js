@@ -31,6 +31,21 @@ class App extends Component {
     if (this._azureExchangeStarted) return;
     this._azureExchangeStarted = true;
     this.setState({ azureExchangeError: null });
+    if (config.authMode !== 'legacy') {
+      // One-backend mode: Microsoft already proved who the user is. Keep their
+      // identity in the session; there is no CCM token to exchange for.
+      const account = accountInfo?.account || {};
+      const email = account.userName || account.idTokenClaims?.preferred_username || '';
+      const id = account.accountIdentifier || account.idTokenClaims?.oid || email;
+      if (!email) {
+        this._azureExchangeStarted = false;
+        this.setState({ azureExchangeError: 'Microsoft sign-in did not return an email address.' });
+        return;
+      }
+      setSession(id, email, 'token' + id, accountInfo?.jwtIdToken || '', false, account.name || email);
+      this.forceUpdate();
+      return;
+    }
     try {
       const response = await fetch(`${config.apiUrl}/api/auth/azure/login`, {
         method: 'POST',

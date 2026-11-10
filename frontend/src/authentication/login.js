@@ -71,6 +71,11 @@ class Login extends React.Component {
   }
 
   async verifyDbConnection() {
+    if (config.authMode !== 'legacy') {
+      // One-backend mode: sign-in doesn't depend on the old backend being up.
+      this.setState({ loginEnabled: true, loading: false });
+      return;
+    }
     this.setState({ loading: true });
     setNewSession("emailUrl", "");
     await new CommonUtilityController().verifyDbConnection()
@@ -174,6 +179,15 @@ class Login extends React.Component {
   }
   // ===== END TEMPORARY DEV-ONLY BYPASS =====
 
+  // Local testing without Microsoft sign-in (development builds only, when
+  // VITE_DEV_LOGIN_EMAIL is set). Starts a session for that email; no backend call.
+  localLogin = () => {
+    const email = config.devLoginEmail;
+    if (!email) return;
+    setSession(email, email, 'token' + email, '', true, email.split('@')[0]);
+    this.setState({ isExternalLogin: true });
+  }
+
   sendOTP = () => {
     let { loginValues } = this.state;
     if (!loginValues.UserName?.trim()) {
@@ -224,6 +238,7 @@ class Login extends React.Component {
 
   render() {
     let { loginEnabled, isExternalLogin, loading, loginValues, loginErrors, snackbar, otp } = this.state;
+    const legacy = config.authMode === 'legacy';
 
     if (isExternalLogin) {
       return (
@@ -264,14 +279,20 @@ class Login extends React.Component {
                       <h2>Sign in</h2>
                       <p className="cx-muted" style={{ margin: '6px 0 0' }}>Use your company account to continue.</p>
                     </div>
-                    {!loginEnabled && !loading && (
+                    {legacy && !loginEnabled && !loading && (
                       <div className="cx-banner bad"><span className="cx-s12">Can't reach the CCM server. Check that the backend is running.</span></div>
                     )}
-                    {/* TEMPORARY: onClick={this.devLogin} bypasses Microsoft sign-in. Revert to onClick={login} to restore real Azure AD login. */}
-                    <button type="button" className="cx-btn primary block" onClick={this.devLogin} disabled={isInProgress || !loginEnabled}>
-                      Continue with Microsoft SSO
+                    {/* Legacy mode keeps the temporary FastAPI dev-login bypass; one-backend mode uses real Microsoft sign-in. */}
+                    <button type="button" className="cx-btn primary block" onClick={legacy ? this.devLogin : login} disabled={isInProgress || !loginEnabled}>
+                      {isInProgress ? 'Signing in…' : 'Continue with Microsoft SSO'}
                     </button>
+                    {config.devLoginEmail && (
+                      <button type="button" className="cx-btn block" onClick={this.localLogin} title="Development builds only (VITE_DEV_LOGIN_EMAIL)">
+                        Continue as {config.devLoginEmail} (local testing)
+                      </button>
+                    )}
 
+                    {legacy && <>
                     <div className="cx-or">or sign in as an external user</div>
 
                     <div className="cx-field">
@@ -294,6 +315,7 @@ class Login extends React.Component {
                     <button type="submit" className="cx-btn block" disabled={!loginEnabled || loading}>
                       {loading ? 'Please wait…' : 'Sign in'}
                     </button>
+                    </>}
                   </form>
                 </section>
               </div>

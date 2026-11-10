@@ -4,6 +4,7 @@
  *   centre: generate options, the editable reply, review flags, export
  *   right:  contract clauses and earlier letters the draft used, warnings
  * URL: #/master/ai-drafting?project=<id>&file=<letter file>
+ * Without a letter it shows the start screen (drafting-start.jsx).
  *
  * The API keeps one saved draft per project + letter + user. The generation
  * job is linked to it (source_job_id) so review/export use the same evidence.
@@ -14,8 +15,16 @@ import {
 } from '../ccm-public-api';
 import { errorText, readinessText, runJob } from '../project-setup';
 import {
-  ProjectPicker, cacheDraftResult, currentUser, loadDraftResult, pickProject, replyState, toUtf16Range, useProjects,
+  cacheDraftResult, currentUser, loadDraftResult, replyState, toUtf16Range, useProjects,
 } from '../session';
+import {
+  DEFAULT_OPTIONS, LENGTHS, LETTER_TYPES, MAX_INSTRUCTION_TEXT, TONES, clearDraftHandoff, composeInstructions, letterTypeOf,
+  parseInstructions, peekDraftHandoff,
+} from '../draft-options';
+import MenuSelect from '../ui/menu-select';
+import DraftingStart from './drafting-start';
+import DraftsHistory from './drafts-history';
+import LetterReply from './letter-reply';
 import {
   flagSegments, historyCutoff, openBlob, saveBlob, toExternalId,
 } from '../api-console/helpers';
@@ -31,56 +40,6 @@ const QUICK_INSTRUCTIONS = [
 ];
 
 const FLAG_TONE = { red: 'bad', amber: 'warn' };
-
-/* ─── Letter picker (no file selected) ──────────────────────────────────── */
-
-function Picker({ wantedProject }) {
-  const { projects, error } = useProjects();
-  const [project, setProject] = React.useState('');
-  const [letters, setLetters] = React.useState(null);
-  const user = currentUser();
-  React.useEffect(() => { if (projects) setProject(pickProject(projects, wantedProject)); }, [projects, wantedProject]);
-  React.useEffect(() => {
-    if (!project) return;
-    setLetters(null);
-    ccmApi.letters.list(project, { direction: 'incoming', state: 'open', user, page_size: 100 })
-      .then((r) => setLetters(r.ok ? r.data.letters : []));
-  }, [project, user]);
-  return (
-    <>
-      <PageTop crumbs={[{ label: 'Home', to: ROUTES.dashboard }]} title="AI Drafting" />
-      <div className="cx-content">
-        {error && <div className="cx-banner bad"><span className="cx-s12">{error}</span></div>}
-        {project && (
-          <Card title="Choose a letter to reply to" right={<ProjectPicker projects={projects} value={project} onChange={setProject} />}>
-            {!letters ? <Skeleton h={160} /> : letters.length === 0 ? (
-              <Empty title="No open incoming letters" action={<Btn onClick={() => go(ROUTES.lettersFor(project))}>All letters</Btn>}>
-                Every incoming letter in this project has a draft or a reply.
-              </Empty>
-            ) : (
-              <div className="cx-table-wrap">
-                <table className="cx-table">
-                  <thead><tr><th>Reference</th><th>Subject</th><th>From</th><th>Date</th><th /></tr></thead>
-                  <tbody>
-                    {letters.map((l) => (
-                      <tr key={l.file} className="clickable" onClick={() => go(ROUTES.drafting(project, l.file))}>
-                        <td className="cx-s12">{l.reference || l.file}</td>
-                        <td><div className="cx-ellipsis">{l.subject}</div></td>
-                        <td className="cx-s12">{l.sender}</td>
-                        <td style={{ whiteSpace: 'nowrap' }}>{l.date ? fmtDate(l.date) : '—'}</td>
-                        <td><Btn size="sm">Draft reply</Btn></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        )}
-      </div>
-    </>
-  );
-}
 
 /* ─── Left column ───────────────────────────────────────────────────────── */
 
@@ -119,9 +78,8 @@ function IncomingLetter({ project, letter }) {
         {(letter.milestones || []).map((m) => <Chip key={m} tone="warn">{m}</Chip>)}
       </div>
       {letter.reply && (
-        <div className="cx-banner info" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
-          <b className="cx-s12">Already answered</b>
-          <span className="cx-s12">By {letter.reply.ref || letter.reply.file}{letter.reply.date ? ` · ${fmtDate(letter.reply.date)}` : ''}. A new draft should stay consistent with it.</span>
+        <div className="cx-banner info">
+          <span className="cx-s12">Already answered by <b>{letter.reply.ref || letter.reply.file}</b>{letter.reply.date ? ` on ${fmtDate(letter.reply.date)}` : ''}. The reply is shown above; a new draft should stay consistent with it.</span>
         </div>
       )}
       <div className="cx-toolbar" style={{ gap: 6 }}>
@@ -302,7 +260,7 @@ function HighlightedText({ text, flags }) {
 export default function AiDrafting() {
   const project = useQueryParam('project');
   const file = useQueryParam('file');
-  if (!project || !file) return <Picker wantedProject={project} />;
+  if (!project || !file) return <DraftingStart />;
   return <DraftingWorkspace key={`${project}/${file}`} project={project} file={file} />;
 }
 
@@ -322,6 +280,11 @@ function DraftingWorkspace({ project, file }) {
   const [instructions, setInstructions] = React.useState('');
   const [confirmRegenerate, setConfirmRegenerate] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [options, setOptions] = React.useState(DEFAULT_OPTIONS); // letter type, tone, length, prompt
+  const [history, setHistory] = React.useState(false);
+  const [autoStart, setAutoStart] = React.useState(false); // came from the start screen's Send
+  const autoDone = React.useRef(false);
+  const { projects } = useProjects();
   const editor = React.useRef(null);
 
   const load = React.useCallback(async () => {
@@ -340,7 +303,19 @@ function DraftingWorkspace({ project, file }) {
     const draft = d.ok ? d.data : null;
     setSaved(draft);
     setText(draft ? draft.text : '');
-    setInstructions(draft?.instructions || '');
+    const handoff = peekDraftHandoff(project, file);
+    if (handoff) {
+      setOptions({
+        type: handoff.type || '', tone: handoff.tone || DEFAULT_OPTIONS.tone,
+        length: handoff.length || DEFAULT_OPTIONS.length, prompt: handoff.prompt || '',
+      });
+      setInstructions(handoff.text || '');
+      setAutoStart(true);
+    } else {
+      const parsed = parseInstructions(draft?.instructions);
+      setOptions(parsed.options);
+      setInstructions(parsed.text);
+    }
     if (draft?.source_job_id) {
       const r = await loadDraftResult(project, draft.source_job_id);
       setResult(r);
@@ -367,6 +342,7 @@ function DraftingWorkspace({ project, file }) {
   const generate = async () => {
     setConfirmRegenerate(false);
     setBusy('generate');
+    const composed = composeInstructions(options, instructions);
     try {
       const attachments = (letter.attachments || []).filter((x) => (x.text || '').trim()).slice(0, 8)
         .map((x, i) => ({ external_id: toExternalId(x.file || `attachment-${i + 1}`, `attachment-${i + 1}`), content: { text: x.text } }));
@@ -377,14 +353,14 @@ function DraftingWorkspace({ project, file }) {
         attachments,
         reply_to_party: replyTo,
         history_as_of: historyAsOf,
-        instructions: instructions.trim(),
+        instructions: composed,
       });
       const receipt = unwrap(receiptResponse);
       const draftResult = jobResult(await waitForJob(receipt, { timeoutMs: 15 * 60 * 1000, intervalMs: 2000 }));
       cacheDraftResult(receipt.id, draftResult);
       // Save straight away: the job expires an hour after it finishes.
       const s = unwrap(await ccmApi.savedDrafts.save(project, file, {
-        user, text: draftResult.draft.text, source_job_id: receipt.id, instructions: instructions.trim(),
+        user, text: draftResult.draft.text, source_job_id: receipt.id, instructions: composed,
       }));
       setSaved(s);
       setResult(draftResult);
@@ -397,6 +373,23 @@ function DraftingWorkspace({ project, file }) {
     } finally {
       setBusy('');
     }
+  };
+
+  // Coming from the start screen: generate straight away, or confirm first if a
+  // saved draft would be replaced.
+  React.useEffect(() => {
+    if (!autoStart || autoDone.current || !letter || !replyTo || !historyAsOf) return;
+    autoDone.current = true;
+    setAutoStart(false);
+    clearDraftHandoff();
+    if (!canDraft) { toast('This letter can\'t be drafted yet. Check the project setup and the letter text.', 'error'); return; }
+    if (saved) setConfirmRegenerate(true); else generate();
+  }, [autoStart, letter, replyTo, historyAsOf, canDraft, saved]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const editInstructions = (value) => {
+    setInstructions(value);
+    const chosen = letterTypeOf(options.type)?.prompts.find((x) => x.title === options.prompt);
+    if (chosen && !value.startsWith(chosen.text)) setOptions((o) => ({ ...o, prompt: '' }));
   };
 
   const save = async () => {
@@ -470,6 +463,8 @@ function DraftingWorkspace({ project, file }) {
       <PageTop crumbs={[{ label: 'Letters', to: ROUTES.lettersFor(project) }, { label: ref }]} title={`Draft reply · ${ref}`}
         actions={(
           <>
+            <Btn onClick={() => go(ROUTES.drafting(project))}>New draft</Btn>
+            <Btn onClick={() => setHistory(true)}>Drafts history</Btn>
             <Btn onClick={() => exportDocx(false)} disabled={!text.trim() || !!busy}
               title="DOCX with a table of review notes at the end">{busy === 'export' ? 'Exporting…' : 'Export DOCX'}</Btn>
             <Btn variant="primary" onClick={() => exportDocx(true)} disabled={!text.trim() || !!busy}
@@ -486,6 +481,7 @@ function DraftingWorkspace({ project, file }) {
             <Btn size="sm" onClick={() => go(ROUTES.project(project, 'setup'))}>Open project setup</Btn>
           </div>
         )}
+        {letter && <LetterReply project={project} letter={letter} />}
         {!letter ? (!error && <Skeleton h={520} />) : (
           <div className="cx-row stack-md" style={{ alignItems: 'flex-start' }}>
             <div className="cx-col" style={{ width: 330, flex: 'none' }}>
@@ -516,14 +512,28 @@ function DraftingWorkspace({ project, file }) {
                   </div>
                   <div className="cx-field cx-grow" style={{ minWidth: 240 }}>
                     <label htmlFor="dr-ins">Instructions for the AI</label>
-                    <textarea id="dr-ins" className="cx-textarea" rows={2} maxLength={4000} value={instructions} onChange={(e) => setInstructions(e.target.value)}
+                    <textarea id="dr-ins" className="cx-textarea" rows={2} maxLength={MAX_INSTRUCTION_TEXT} value={instructions} onChange={(e) => editInstructions(e.target.value)}
                       placeholder="Optional, e.g. ask for the programme impact and do not accept any delay" />
                   </div>
                 </div>
+                <div className="cx-composer-bar">
+                  <MenuSelect label="Letter type" heading="Letter type" value={options.type} menuWidth={280} disabled={!!busy}
+                    onChange={(id) => setOptions((o) => ({ ...o, type: id, prompt: '' }))}
+                    options={LETTER_TYPES.map((x) => ({ id: x.id, label: x.label }))} />
+                  <MenuSelect label="Tone" heading="Tone of letter" value={options.tone} options={TONES} disabled={!!busy}
+                    onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} />
+                  <MenuSelect label="Length" heading="Response length" value={options.length} options={LENGTHS} disabled={!!busy}
+                    onChange={(id) => setOptions((o) => ({ ...o, length: id }))} />
+                </div>
                 <div className="cx-prompts">
-                  {QUICK_INSTRUCTIONS.map((p) => (
-                    <button key={p} type="button" className="cx-prompt" disabled={!!busy} onClick={() => setInstructions(p)}>{p}</button>
-                  ))}
+                  {letterTypeOf(options.type)
+                    ? letterTypeOf(options.type).prompts.map((x) => (
+                      <button key={x.title} type="button" className={`cx-prompt ${options.prompt === x.title ? 'on' : ''}`} disabled={!!busy} title={x.text}
+                        onClick={() => { setInstructions(x.text); setOptions((o) => ({ ...o, prompt: x.title })); }}>{x.title}</button>
+                    ))
+                    : QUICK_INSTRUCTIONS.map((x) => (
+                      <button key={x} type="button" className="cx-prompt" disabled={!!busy} onClick={() => editInstructions(x)}>{x}</button>
+                    ))}
                 </div>
                 <div className="cx-toolbar">
                   <span className="cx-s11 cx-muted">Generating takes about a minute. The draft is saved under {user}.</span>
@@ -588,6 +598,7 @@ function DraftingWorkspace({ project, file }) {
           <div className="cx-toolbar"><span className="cx-spacer" /><Btn onClick={() => setConfirmRegenerate(false)}>Cancel</Btn><Btn variant="primary" onClick={generate}>Regenerate</Btn></div>
         </Modal>
       )}
+      {history && <DraftsHistory projects={projects} initialProject={project} onClose={() => setHistory(false)} />}
       {confirmDelete && (
         <Modal title="Delete this draft?" size="sm" onClose={() => setConfirmDelete(false)}>
           <span>Your saved reply to {ref} and its link to the generation evidence are removed. This can&apos;t be undone.</span>

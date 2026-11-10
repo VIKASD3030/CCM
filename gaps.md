@@ -11,7 +11,7 @@ soon after, P3 improvement.
 
 | # | Gap | Why | Priority | Status |
 |---|---|---|---|---|
-| 1 | Login without the old FastAPI backend | Login (`/api/auth/*`, dev-login, Azure token exchange) still calls FastAPI. With one backend, sign-in must work from Azure AD (MSAL) alone, and the app must stop relying on the `UserId` / `token<id>` cookies set by FastAPI. | P1 | open |
+| 1 | Login without the old FastAPI backend | Login (`/api/auth/*`, dev-login, Azure token exchange) still calls FastAPI. With one backend, sign-in must work from Azure AD (MSAL) alone, and the app must stop relying on the `UserId` / `token<id>` cookies set by FastAPI. Done 2026-11-08: Microsoft sign-in keeps the identity locally (VITE_AUTH_MODE=legacy restores the old flow) and a dev-only local login exists. Still to confirm: the Azure app registration allows the localhost and production redirect URIs. | P1 | in progress |
 | 2 | Production proxy that holds the API token | The Vite dev proxy adds the bearer token only in development. A production build needs a small proxy (nginx or a short Node/Python service) that checks the user's Azure login, adds the token and forwards `/api/v1`. The token must never reach the browser. | P1 | open |
 | 3 | Per-user access control | One business-unit token sees all assigned projects. The API leaves user-level permissions (who may see or draft for which project) to the caller, so the proxy or app must enforce them. | P2 | open |
 | 4 | Token rotation handling | `POST /auth/rotate` returns a new token once; the old one dies after 5 minutes. The proxy needs a safe way to rotate and store the token, and a recovery path with the operator. | P2 | open |
@@ -42,6 +42,9 @@ soon after, P3 improvement.
 | 19 | Approval before Apply | The API docs say Apply is technical activation and the client collects any approval first. There is no approval step before rules are applied. | P3 | open |
 | 20 | Guided rule editing | Rules are edited as raw TOML after creation. A form for common sections (categories, business rules, drafting guidance) would reduce errors. | P3 | open |
 | 21 | Outgoing folder for older projects | Projects created before the incoming/outgoing split have one upload folder. The Letters tab shows the lines to add, but it does not add them automatically. | P3 | open |
+| 22 | My Drafts opens on an empty tab | It opens on "In progress"; an exported draft only shows under "Exported", so the page looks empty. Consider an "All" tab as the default. (Found in real-backend testing, 2026-11-08.) | P3 | open |
+| 23 | External (non-Microsoft) users can't sign in | The OTP login for external users ran on FastAPI. In one-backend mode the login page offers Microsoft sign-in only. Decide whether external users need access and how they sign in. | P2 | open |
+| 24 | Drafting from pasted letter text | The AI Drafting prototype lets users paste a client letter. The API can generate from raw text, but saving, review and DOCX export need a stored letter, so the start screen requires attaching a stored letter or uploading its PDF. Supporting paste-only drafts needs local storage of the draft, or importing the pasted text as a letter. | P3 | open |
 
 ## Testing notes
 
@@ -49,4 +52,5 @@ Findings from testing every endpoint on the mock and on the real backend go here
 
 | Endpoint / screen | Mock | Real | Notes |
 |---|---|---|---|
-| | | | |
+| Project setup (read-only on 2 live projects): projects, readiness, rules, versions, plan, contracts, import options, letters | tested | tested | CCM screens match the API. No create, import, save or Apply run on live projects. |
+| Drafting: letter, draft-replies + poll, save, review, export, drafts list | tested | tested | Works end to end; exported draft visible in CCM. Postman hit `invalid_history_cutoff` when history_as_of was before the letter date (request error, not a bug). |

@@ -95,8 +95,8 @@ export async function loadDraftResult(project, jobId) {
 /* ─── Letter helpers ────────────────────────────────────────────────────── */
 
 export const REPLY_STATE = {
-  open: ['Open', 'warn'],
-  drafting: ['Drafting', 'blue'],
+  open: ['No reply found', 'warn'],
+  drafting: ['My draft', 'blue'],
   exported: ['Exported', 'ok'],
   replied: ['Replied', 'ok'],
 };

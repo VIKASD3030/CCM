@@ -275,7 +275,7 @@ export function Modal({ title, onClose, children, size }) {
 }
 
 /** Page header bar: breadcrumb + title on the left, search + actions on the right. */
-export function PageTop({ crumbs = [], title, actions, onSearch, searchPlaceholder = 'Search letters, clauses, projects' }) {
+export function PageTop({ crumbs = [], title, actions, onSearch, searchPlaceholder = 'Search letters, clauses, projects', search = true }) {
   const [q, setQ] = React.useState('');
   const submit = (e) => {
     e.preventDefault();
@@ -300,10 +300,12 @@ export function PageTop({ crumbs = [], title, actions, onSearch, searchPlacehold
         <h1>{title}</h1>
       </div>
       <span className="cx-spacer" />
-      <form className="cx-search" onSubmit={submit} role="search">
-        <Search />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} aria-label="Search" />
-      </form>
+      {search && (
+        <form className="cx-search" onSubmit={submit} role="search">
+          <Search />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} aria-label="Search" />
+        </form>
+      )}
       {actions && <div className="cx-top-actions">{actions}</div>}
     </header>
   );

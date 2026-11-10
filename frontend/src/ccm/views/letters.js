@@ -13,13 +13,24 @@ import {
   PageTop, Btn, Chip, Empty, Skeleton, go, ROUTES, useQueryParam, fmtDate,
 } from '../ui/kit';
 
+// Same filters as the CCM backend's letter list. "Recently" means the last
+// CCM_RECENT_DAYS (30 by default): by import time, or by the letter's date.
 const STATES = [
   { key: 'all', label: 'All' },
-  { key: 'open', label: 'Open' },
-  { key: 'drafting', label: 'Drafting' },
+  { key: 'open', label: 'No reply found' },
+  { key: 'drafting', label: 'My drafts' },
   { key: 'exported', label: 'Exported' },
   { key: 'replied', label: 'Replied' },
+  { key: 'imported', label: 'Imported recently', recent: true },
+  { key: 'received', label: 'Received recently', recent: true },
 ];
+const MAIN_STATES = ['open', 'drafting', 'exported', 'replied'];
+
+function stateCount(counts, key) {
+  if (!counts) return null;
+  if (key === 'all') return counts.all ?? MAIN_STATES.reduce((n, k) => n + (counts[k] || 0), 0);
+  return counts[key] ?? null;
+}
 const PAGE_SIZE = 50;
 
 export default function Letters() {
@@ -70,12 +81,15 @@ export default function Letters() {
             <div className="cx-toolbar">
               <ProjectPicker projects={projects} value={project} onChange={setProject} />
               <div className="cx-tabs" role="tablist">
-                {STATES.map((s) => (
-                  <button key={s.key} type="button" role="tab" aria-selected={state === s.key} className={`cx-tab ${state === s.key ? 'on' : ''}`} onClick={() => setState(s.key)}>
-                    {s.label}
-                    {data?.counts && s.key !== 'all' && data.counts[s.key] != null && <span className="n">{data.counts[s.key]}</span>}
-                  </button>
-                ))}
+                {STATES.map((s) => {
+                  const n = stateCount(data?.counts, s.key);
+                  return (
+                    <button key={s.key} type="button" role="tab" aria-selected={state === s.key} className={`cx-tab ${state === s.key ? 'on' : ''}`}
+                      onClick={() => setState(s.key)} title={s.recent ? 'Incoming letters from the last 30 days' : undefined}>
+                      {s.label}{n != null && <span className="n">{n}</span>}
+                    </button>
+                  );
+                })}
               </div>
               <span className="cx-spacer" />
               <input className="cx-input" style={{ width: 240, maxWidth: '100%' }} value={q} onChange={(e) => setQ(e.target.value)}
@@ -96,28 +110,38 @@ export default function Letters() {
               <>
                 <div className="cx-table-wrap">
                   <table className="cx-table">
-                    <thead><tr><th>Reference</th><th>From / subject</th><th>Date</th><th>Reply</th><th /></tr></thead>
+                    <thead><tr><th>Reference</th><th>Date</th><th>Key dates</th><th>Subject</th><th>Reply</th><th /></tr></thead>
                     <tbody>
                       {data.letters.map((l) => {
                         const [label, tone] = replyState(l);
                         return (
                           <tr key={l.file} className="clickable" onClick={() => open(l)}>
-                            <td className="cx-s12" style={{ whiteSpace: 'nowrap' }}>
+                            <td className="cx-s12 cx-mono" style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
                               {l.reference || <span className="cx-muted">{l.file}</span>}
-                              {l.milestones?.length > 0 && <div>{l.milestones.slice(0, 2).map((m) => <Chip key={m} tone="warn">{m}</Chip>)}</div>}
-                            </td>
-                            <td>
-                              <div className="cx-ellipsis" style={{ maxWidth: 420 }} title={l.subject}>{l.subject || <span className="cx-muted">No subject</span>}</div>
-                              <div className="cx-s11 cx-muted">{l.sender || 'Unknown sender'}</div>
                             </td>
                             <td style={{ whiteSpace: 'nowrap' }}>{l.date ? fmtDate(l.date) : '—'}</td>
                             <td>
-                              {l.is_incoming ? <Chip tone={tone}>{label}</Chip> : <Chip tone="gray">{l.is_outgoing ? 'Outgoing' : 'Other'}</Chip>}
-                              {l.reply_state?.reply_reference && <div className="cx-s11 cx-muted">{l.reply_state.reply_reference}</div>}
+                              {l.milestones?.length > 0
+                                ? <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{l.milestones.map((m) => <Chip key={m} tone="blue">{m}</Chip>)}</span>
+                                : <span className="cx-muted">—</span>}
+                            </td>
+                            <td>
+                              <div style={{ maxWidth: 420 }} title={l.subject}>{l.subject || <span className="cx-muted">No subject</span>}</div>
+                              <div className="cx-s11 cx-muted">{l.sender || 'Unknown sender'}</div>
+                            </td>
+                            <td>
+                              {!l.is_incoming ? <Chip tone="gray">{l.is_outgoing ? 'Outgoing' : 'Other'}</Chip>
+                                : l.reply_state?.key === 'open' ? <span className="cx-muted">—</span>
+                                  : <Chip tone={tone}>{label}</Chip>}
+                              {l.reply_state?.reply_reference && (
+                                <div className="cx-s11 cx-mono" style={{ fontWeight: 400, color: 'var(--cx-blue)', marginTop: 2 }} title="The reply CCM matched to this letter">
+                                  {l.reply_state.reply_reference}
+                                </div>
+                              )}
                             </td>
                             <td style={{ textAlign: 'right' }}>
                               <Btn size="sm" onClick={(e) => { e.stopPropagation(); open(l); }}>
-                                {!l.is_incoming ? 'View' : l.reply_state?.key === 'open' ? 'Draft reply' : 'Open'}
+                                {!l.is_incoming ? 'View' : l.reply_state?.key === 'open' ? 'Draft reply' : l.reply_state?.key === 'replied' ? 'View reply' : 'Open'}
                               </Btn>
                             </td>
                           </tr>

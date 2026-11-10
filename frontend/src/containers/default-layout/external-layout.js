@@ -25,7 +25,8 @@ class ExternalLayout extends Component {
       isExternalLogout: false,
       loading: false,
       routeItems: [],
-      dashboard: '/master/dashboard',
+      // First screen after sign-in: the AI Drafting start screen (no project selected yet).
+      dashboard: '/master/ai-drafting',
       renderStop: false,
       unauthorized: false,
       moduleMenuData: [],
