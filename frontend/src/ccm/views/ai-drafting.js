@@ -18,8 +18,8 @@ import {
   cacheDraftResult, currentUser, loadDraftResult, replyState, toUtf16Range, useProjects,
 } from '../session';
 import {
-  DEFAULT_OPTIONS, LENGTHS, LETTER_TYPES, MAX_INSTRUCTION_TEXT, TONES, clearDraftHandoff, composeInstructions, letterTypeOf,
-  parseInstructions, peekDraftHandoff,
+  DEFAULT_OPTIONS, LENGTHS, LETTER_TYPES, TONES, charCount, clearDraftHandoff, composeInstructions, letterTypeOf,
+  parseInstructions, peekDraftHandoff, switchTask, taskOf, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
 import DraftingStart from './drafting-start';
@@ -386,11 +386,26 @@ function DraftingWorkspace({ project, file }) {
     if (saved) setConfirmRegenerate(true); else generate();
   }, [autoStart, letter, replyTo, historyAsOf, canDraft, saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Same rules as the start screen: a task stays chosen while its [bracketed]
+  // details are edited, and switching keeps the user's own words.
+  const task = taskOf(options.type, options.prompt);
   const editInstructions = (value) => {
     setInstructions(value);
-    const chosen = letterTypeOf(options.type)?.prompts.find((x) => x.title === options.prompt);
-    if (chosen && !value.startsWith(chosen.text)) setOptions((o) => ({ ...o, prompt: '' }));
+    if (!value.trim() && options.prompt) setOptions((o) => ({ ...o, prompt: '' }));
   };
+  const chooseType = (id) => {
+    if (id === options.type) return;
+    setInstructions((t) => switchTask(t, task, null));
+    setOptions((o) => ({ ...o, type: id, prompt: '' }));
+  };
+  const pickTask = (x) => {
+    const next = x.title === options.prompt ? null : x;
+    setInstructions((t) => switchTask(t, task, next));
+    setOptions((o) => ({ ...o, prompt: next ? next.title : '' }));
+  };
+  const budget = textBudget(options);
+  const used = charCount(instructions.trim());
+  const overBudget = used > budget;
 
   const save = async () => {
     setBusy('save');
@@ -512,13 +527,18 @@ function DraftingWorkspace({ project, file }) {
                   </div>
                   <div className="cx-field cx-grow" style={{ minWidth: 240 }}>
                     <label htmlFor="dr-ins">Instructions for the AI</label>
-                    <textarea id="dr-ins" className="cx-textarea" rows={2} maxLength={MAX_INSTRUCTION_TEXT} value={instructions} onChange={(e) => editInstructions(e.target.value)}
-                      placeholder="Optional, e.g. ask for the programme impact and do not accept any delay" />
+                    <textarea id="dr-ins" className="cx-textarea" rows={2} value={instructions} onChange={(e) => editInstructions(e.target.value)}
+                      placeholder={options.type ? 'Pick a task below, then add your own words' : 'Optional, e.g. ask for the programme impact and do not accept any delay'} />
+                    <div className="cx-composer-foot">
+                      {/\[[A-Z][A-Z0-9 /&,.'-]*\]/.test(instructions) && <span className="cx-s11 cx-warn-text">Replace the [bracketed] details with this letter&apos;s facts.</span>}
+                      <span className="cx-spacer" />
+                      <span className={`cx-count ${overBudget ? 'over' : ''}`} title="Your text, within the 4,000-character instructions limit (the letter type's guidance uses the rest)">{used} / {budget}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="cx-composer-bar">
-                  <MenuSelect label="Letter type" heading="Letter type" value={options.type} menuWidth={280} disabled={!!busy}
-                    onChange={(id) => setOptions((o) => ({ ...o, type: id, prompt: '' }))}
+                  <MenuSelect label="Letter type" heading="Letter category" value={options.type} menuWidth={300} disabled={!!busy}
+                    onChange={chooseType}
                     options={LETTER_TYPES.map((x) => ({ id: x.id, label: x.label }))} />
                   <MenuSelect label="Tone" heading="Tone of letter" value={options.tone} options={TONES} disabled={!!busy}
                     onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} />
@@ -529,7 +549,7 @@ function DraftingWorkspace({ project, file }) {
                   {letterTypeOf(options.type)
                     ? letterTypeOf(options.type).prompts.map((x) => (
                       <button key={x.title} type="button" className={`cx-prompt ${options.prompt === x.title ? 'on' : ''}`} disabled={!!busy} title={x.text}
-                        onClick={() => { setInstructions(x.text); setOptions((o) => ({ ...o, prompt: x.title })); }}>{x.title}</button>
+                        aria-pressed={options.prompt === x.title} onClick={() => pickTask(x)}>{x.title}</button>
                     ))
                     : QUICK_INSTRUCTIONS.map((x) => (
                       <button key={x} type="button" className="cx-prompt" disabled={!!busy} onClick={() => editInstructions(x)}>{x}</button>
@@ -538,7 +558,8 @@ function DraftingWorkspace({ project, file }) {
                 <div className="cx-toolbar">
                   <span className="cx-s11 cx-muted">Generating takes about a minute. The draft is saved under {user}.</span>
                   <span className="cx-spacer" />
-                  <Btn variant="primary" disabled={!canDraft || !replyTo || !historyAsOf || !!busy}
+                  {overBudget && <span className="cx-s11" style={{ color: 'var(--cx-red)' }}>Shorten the instructions by {used - budget} characters.</span>}
+                  <Btn variant="primary" disabled={!canDraft || !replyTo || !historyAsOf || !!busy || overBudget}
                     onClick={() => (saved ? setConfirmRegenerate(true) : generate())}>
                     {busy === 'generate' ? 'Drafting…' : saved ? 'Regenerate' : 'Generate draft'}
                   </Btn>
