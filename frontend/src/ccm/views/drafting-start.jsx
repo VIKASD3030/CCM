@@ -1,7 +1,7 @@
 /**
  * AI Drafting start screen (prototype frames "06a · Start"): the first screen
  * after sign-in and whenever no letter is open.
- *   - Project picker and Drafts history in the header
+ *   - Project picker in the header
  *   - Composer: the user's words, attach the letter to reply to, letter type, tone, length
  *   - Task chips for the chosen letter type (from the CCM prompt library); a
  *     chip puts its task in the box, where the user fills the [bracketed]
@@ -27,7 +27,6 @@ import { Dropzone } from '../ui/modals';
 import {
   PageTop, Btn, Chip, Empty, Skeleton, Modal, go, ROUTES, toast, useQueryParam, fmtDate,
 } from '../ui/kit';
-import DraftsHistory from './drafts-history';
 import paperclipIcon from '../ui/icons/paperclip.svg';
 import sendIcon from '../ui/icons/send-arrow.svg';
 
@@ -122,7 +121,6 @@ export default function DraftingStart() {
   const [options, setOptions] = React.useState(DEFAULT_OPTIONS);
   const [text, setText] = React.useState('');
   const [attaching, setAttaching] = React.useState(false);
-  const [history, setHistory] = React.useState(false);
   const box = React.useRef(null);
 
   // Only a project named in the URL is preselected; otherwise the user picks one.
@@ -187,17 +185,16 @@ export default function DraftingStart() {
 
   return (
     <>
-      <PageTop crumbs={[{ label: 'AI Drafting' }]} title="New draft" search={false}
+      <PageTop crumbs={[{ label: 'AI Drafting', to: ROUTES.draftingHome }, { label: 'Reply' }]} title="Draft a reply" search={false}
         actions={(
           <>
             <MenuSelect variant="project" label="Project" heading="Project" value={project} onChange={chooseProject}
               options={projectOptions} align="right" menuWidth={280} disabled={!projects} />
-            <Btn onClick={() => setHistory(true)} disabled={!projects}>Drafts history</Btn>
           </>
         )} />
       <div className={`cx-start ${type ? '' : 'centered'}`}>
         {projectsError && <div className="cx-banner bad"><b>Couldn&apos;t load projects.</b><span className="cx-s12">{projectsError}</span></div>}
-        <h2>What would you like to draft?</h2>
+        <h2>Which letter are we replying to?</h2>
         <p className="cx-start-sub">
           {type ? 'Choose a letter type, then pick a prompt or write your own.' : 'Choose a letter type to see suggested prompts, or write your own.'}
           {' '}Drafts only use the selected project&apos;s records.
@@ -266,7 +263,6 @@ export default function DraftingStart() {
         <AttachLetterModal project={project} onClose={() => setAttaching(false)}
           onPick={(l) => { setLetter(l); setAttaching(false); }} />
       )}
-      {history && <DraftsHistory projects={projects} initialProject={project} onClose={() => setHistory(false)} />}
     </>
   );
 }

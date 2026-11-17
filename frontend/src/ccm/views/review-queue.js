@@ -39,7 +39,7 @@ export default function ReviewQueue() {
 
   return (
     <>
-      <PageTop crumbs={[{ label: 'Home', to: ROUTES.dashboard }]} title="My drafts" />
+      <PageTop crumbs={[{ label: 'Home', to: ROUTES.dashboard }]} title="Draft history" />
       <div className="cx-content">
         {projectsError && <div className="cx-banner bad"><span className="cx-s12">{projectsError}</span></div>}
         {project && (

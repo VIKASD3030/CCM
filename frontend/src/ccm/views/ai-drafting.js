@@ -15,7 +15,7 @@ import {
 } from '../ccm-public-api';
 import { errorText, readinessText, runJob } from '../project-setup';
 import {
-  cacheDraftResult, currentUser, loadDraftResult, replyState, toUtf16Range, useProjects,
+  cacheDraftResult, currentUser, loadDraftResult, replyState, toUtf16Range,
 } from '../session';
 import {
   DEFAULT_OPTIONS, LENGTHS, LETTER_TYPES, TONES, charCount, clearDraftHandoff, composeInstructions, letterTypeOf,
@@ -23,7 +23,8 @@ import {
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
 import DraftingStart from './drafting-start';
-import DraftsHistory from './drafts-history';
+import DraftingChoice from './drafting-choice';
+import NewLetter from './new-letter';
 import LetterReply from './letter-reply';
 import {
   flagSegments, historyCutoff, openBlob, saveBlob, toExternalId,
@@ -258,10 +259,13 @@ function HighlightedText({ text, flags }) {
 /* ─── Page ──────────────────────────────────────────────────────────────── */
 
 export default function AiDrafting() {
+  const mode = useQueryParam('mode');
   const project = useQueryParam('project');
   const file = useQueryParam('file');
-  if (!project || !file) return <DraftingStart />;
-  return <DraftingWorkspace key={`${project}/${file}`} project={project} file={file} />;
+  if (mode === 'new') return <NewLetter />;
+  if (project && file) return <DraftingWorkspace key={`${project}/${file}`} project={project} file={file} />;
+  if (mode === 'reply' || project) return <DraftingStart />;
+  return <DraftingChoice />;
 }
 
 function DraftingWorkspace({ project, file }) {
@@ -281,10 +285,8 @@ function DraftingWorkspace({ project, file }) {
   const [confirmRegenerate, setConfirmRegenerate] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [options, setOptions] = React.useState(DEFAULT_OPTIONS); // letter type, tone, length, prompt
-  const [history, setHistory] = React.useState(false);
   const [autoStart, setAutoStart] = React.useState(false); // came from the start screen's Send
   const autoDone = React.useRef(false);
-  const { projects } = useProjects();
   const editor = React.useRef(null);
 
   const load = React.useCallback(async () => {
@@ -478,8 +480,7 @@ function DraftingWorkspace({ project, file }) {
       <PageTop crumbs={[{ label: 'Letters', to: ROUTES.lettersFor(project) }, { label: ref }]} title={`Draft reply · ${ref}`}
         actions={(
           <>
-            <Btn onClick={() => go(ROUTES.drafting(project))}>New draft</Btn>
-            <Btn onClick={() => setHistory(true)}>Drafts history</Btn>
+            <Btn onClick={() => go(ROUTES.draftingHome)}>New draft</Btn>
             <Btn onClick={() => exportDocx(false)} disabled={!text.trim() || !!busy}
               title="DOCX with a table of review notes at the end">{busy === 'export' ? 'Exporting…' : 'Export DOCX'}</Btn>
             <Btn variant="primary" onClick={() => exportDocx(true)} disabled={!text.trim() || !!busy}
@@ -619,7 +620,6 @@ function DraftingWorkspace({ project, file }) {
           <div className="cx-toolbar"><span className="cx-spacer" /><Btn onClick={() => setConfirmRegenerate(false)}>Cancel</Btn><Btn variant="primary" onClick={generate}>Regenerate</Btn></div>
         </Modal>
       )}
-      {history && <DraftsHistory projects={projects} initialProject={project} onClose={() => setHistory(false)} />}
       {confirmDelete && (
         <Modal title="Delete this draft?" size="sm" onClose={() => setConfirmDelete(false)}>
           <span>Your saved reply to {ref} and its link to the generation evidence are removed. This can&apos;t be undone.</span>

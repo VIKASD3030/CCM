@@ -14,7 +14,7 @@ const PRIMARY = [
   { label: 'Projects', url: ROUTES.projects, icon: FolderKanban, match: ['/ccm/project'] },
   { label: 'Letters', url: ROUTES.letters, icon: Inbox },
   { label: 'AI Drafting', url: '/master/ai-drafting', icon: Sparkles },
-  { label: 'My Drafts', url: '/ccm/review', icon: ClipboardCheck },
+  { label: 'Draft History', url: '/ccm/review', icon: ClipboardCheck },
   { label: 'Knowledge Base', url: ROUTES.knowledge, icon: BookOpen },
 ];
 const PRIMARY_URLS = new Set(PRIMARY.map((p) => p.url));

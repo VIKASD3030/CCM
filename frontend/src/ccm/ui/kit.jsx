@@ -18,10 +18,13 @@ export const ROUTES = {
   letters: '/ccm/letters',
   lettersFor: (project) => `/ccm/letters?project=${encodeURIComponent(project)}`,
   // A stored letter is identified by project + file on the CCM public API.
+  // AI Drafting home: choose "new letter" or "reply".
+  draftingHome: '/master/ai-drafting',
+  newLetter: '/master/ai-drafting?mode=new',
+  // With a file: the reply workspace. Without: the reply start screen.
   drafting: (project, file) => {
-    if (!project) return '/master/ai-drafting';
-    const q = `?project=${encodeURIComponent(project)}${file ? `&file=${encodeURIComponent(file)}` : ''}`;
-    return `/master/ai-drafting${q}`;
+    if (file && project) return `/master/ai-drafting?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file)}`;
+    return `/master/ai-drafting?mode=reply${project ? `&project=${encodeURIComponent(project)}` : ''}`;
   },
   review: (project) => `/ccm/review${project ? `?project=${encodeURIComponent(project)}` : ''}`,
   knowledge: '/ccm/knowledge',
