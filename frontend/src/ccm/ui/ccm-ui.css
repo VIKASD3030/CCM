@@ -346,7 +346,6 @@ mark.cx-flag.amber { background: var(--cx-warn-soft); box-shadow: inset 0 -2px 0
 .cx-warn-text { color: var(--cx-warn); }
 .cx-count { font-size: 11px; color: var(--cx-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cx-count.over { color: var(--cx-red); font-weight: 700; }
-.cx-task-chips .cx-prompt { font-size: 13px; padding: 6px 14px; border-radius: 16px; }
 
 /* ── AI Drafting home: new letter or reply ── */
 .cx-choice { width: 820px; max-width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }

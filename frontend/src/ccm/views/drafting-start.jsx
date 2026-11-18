@@ -2,14 +2,10 @@
  * AI Drafting start screen (prototype frames "06a · Start"): the first screen
  * after sign-in and whenever no letter is open.
  *   - Project picker in the header
- *   - Composer: the user's words, attach the letter to reply to, letter type, tone, length
- *   - Task chips for the chosen letter type (from the CCM prompt library); a
- *     chip puts its task in the box, where the user fills the [bracketed]
- *     details and adds their own words
- * The letter type's system prompt is added out of sight. Everything goes into
- * the draft request's `instructions`, kept within the API's 4,000 characters
- * (see draft-options.js). Send hands the choices to the drafting workspace,
- * which generates the reply.
+ *   - Composer: the user's words, attach the letter to reply to, tone, length
+ * Tone, length and the user's words go into the draft request's `instructions`,
+ * kept within the API's 4,000 characters (see draft-options.js). Send hands the
+ * choices to the drafting workspace, which generates the reply.
  *
  * The CCM public API saves, reviews and exports replies only for stored
  * letters, so the letter is attached from the project's letters or uploaded as
@@ -20,7 +16,7 @@ import { ccmApi } from '../ccm-public-api';
 import { errorText, readinessText, runJob } from '../project-setup';
 import { currentUser, rememberProject, replyState, useProjects } from '../session';
 import {
-  DEFAULT_OPTIONS, LENGTHS, LETTER_TYPES, TONES, charCount, letterTypeOf, setDraftHandoff, switchTask, taskOf, textBudget,
+  DEFAULT_OPTIONS, LENGTHS, TONES, charCount, setDraftHandoff, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
 import { Dropzone } from '../ui/modals';
@@ -146,31 +142,12 @@ export default function DraftingStart() {
 
   const chooseProject = (id) => { setProject(id); setLetter(null); rememberProject(id); };
 
-  const type = letterTypeOf(options.type);
-  const task = taskOf(options.type, options.prompt);
-  const chooseType = (id) => {
-    if (id === options.type) return;
-    setText((t) => switchTask(t, task, null));
-    setOptions((o) => ({ ...o, type: id, prompt: '' }));
-  };
-  // Clicking the chosen task again unselects it.
-  const pickPrompt = (p) => {
-    const next = p.title === options.prompt ? null : p;
-    setText((t) => switchTask(t, task, next));
-    setOptions((o) => ({ ...o, prompt: next ? next.title : '' }));
-    box.current?.focus();
-  };
-  const editText = (value) => {
-    setText(value);
-    // The task stays chosen while its details are edited; clearing the box unselects it.
-    if (!value.trim() && options.prompt) setOptions((o) => ({ ...o, prompt: '' }));
-  };
+  const editText = (value) => setText(value);
 
   const ready = info?.readiness?.ready;
   const budget = textBudget(options);
   const used = charCount(text.trim());
   const over = used > budget;
-  const placeholders = /\[[A-Z][A-Z0-9 /&,.'-]*\]/.test(text);
   const missing = !project ? 'Select a project first.' : !letter ? 'Attach the letter you are replying to.'
     : info && !ready ? 'This project is not ready for drafting.'
       : over ? `Shorten your text by ${used - budget} characters (the instructions limit is 4,000).` : '';
@@ -192,12 +169,11 @@ export default function DraftingStart() {
               options={projectOptions} align="right" menuWidth={280} disabled={!projects} />
           </>
         )} />
-      <div className={`cx-start ${type ? '' : 'centered'}`}>
+      <div className="cx-start centered">
         {projectsError && <div className="cx-banner bad"><b>Couldn&apos;t load projects.</b><span className="cx-s12">{projectsError}</span></div>}
         <h2>Which letter are we replying to?</h2>
         <p className="cx-start-sub">
-          {type ? 'Choose a letter type, then pick a prompt or write your own.' : 'Choose a letter type to see suggested prompts, or write your own.'}
-          {' '}Drafts only use the selected project&apos;s records.
+          Attach the letter, choose the tone and length, and add any instructions. Drafts only use the selected project&apos;s records.
         </p>
 
         {info && !ready && (
@@ -210,7 +186,7 @@ export default function DraftingStart() {
 
         <div className="cx-composer">
           <textarea ref={box} rows={2} value={text} onChange={(e) => editText(e.target.value)}
-            placeholder={type ? 'Pick a task below, then add your own words…' : 'Describe the reply you need, or choose a letter type to see its tasks…'}
+            placeholder="Describe the reply you need (optional)…"
             aria-label="Describe the reply you need"
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
           <div className="cx-composer-bar">
@@ -222,8 +198,6 @@ export default function DraftingStart() {
               {letter ? (letter.reference || letter.file) : 'No letter attached'}
               {letter && <button type="button" className="cx-link" onClick={() => setLetter(null)} aria-label="Remove attached letter">✕</button>}
             </span>
-            <MenuSelect label="Letter type" heading="Letter category" value={options.type} onChange={chooseType} menuWidth={300}
-              options={LETTER_TYPES.map((t) => ({ id: t.id, label: t.label }))} />
             <MenuSelect label="Tone" heading="Tone of letter" value={options.tone} onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} options={TONES} />
             <MenuSelect label="Length" heading="Response length" value={options.length} onChange={(id) => setOptions((o) => ({ ...o, length: id }))} options={LENGTHS} />
             <span className="cx-spacer" />
@@ -234,29 +208,14 @@ export default function DraftingStart() {
           <div className="cx-composer-foot">
             <span className="cx-composer-note">
               {letter?.subject ? <>Replying to: {letter.subject}{letter.sender ? ` · from ${letter.sender}` : ''}</> : null}
-              {placeholders && <span className="cx-warn-text">{letter?.subject ? ' · ' : ''}Replace the [bracketed] details with this letter&apos;s facts.</span>}
             </span>
             <span className="cx-spacer" />
-            <span className={`cx-count ${over ? 'over' : ''}`} title="Your text, within the 4,000-character instructions limit (the letter type's guidance uses the rest)">
+            <span className={`cx-count ${over ? 'over' : ''}`} title="Your text, within the 4,000-character instructions limit (the tone and length guidance uses the rest)">
               {used} / {budget}
             </span>
           </div>
         </div>
 
-        {type && (
-          <div className="cx-sugg">
-            <div className="cx-sugg-head">Tasks · {type.label}</div>
-            <span className="cx-s12 cx-muted">{type.covers}</span>
-            <div className="cx-prompts cx-task-chips">
-              {type.prompts.map((p) => (
-                <button key={p.title} type="button" className={`cx-prompt ${options.prompt === p.title ? 'on' : ''}`} title={p.text}
-                  aria-pressed={options.prompt === p.title} onClick={() => pickPrompt(p)}>
-                  {p.title}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {attaching && (

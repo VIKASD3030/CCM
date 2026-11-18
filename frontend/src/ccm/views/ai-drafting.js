@@ -18,8 +18,8 @@ import {
   cacheDraftResult, currentUser, loadDraftResult, replyState, toUtf16Range,
 } from '../session';
 import {
-  DEFAULT_OPTIONS, LENGTHS, LETTER_TYPES, TONES, charCount, clearDraftHandoff, composeInstructions, letterTypeOf,
-  parseInstructions, peekDraftHandoff, switchTask, taskOf, textBudget,
+  DEFAULT_OPTIONS, LENGTHS, TONES, charCount, clearDraftHandoff, composeInstructions,
+  parseInstructions, peekDraftHandoff, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
 import DraftingStart from './drafting-start';
@@ -284,7 +284,7 @@ function DraftingWorkspace({ project, file }) {
   const [instructions, setInstructions] = React.useState('');
   const [confirmRegenerate, setConfirmRegenerate] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
-  const [options, setOptions] = React.useState(DEFAULT_OPTIONS); // letter type, tone, length, prompt
+  const [options, setOptions] = React.useState(DEFAULT_OPTIONS); // tone and length (letter type and prompt stay empty for replies)
   const [autoStart, setAutoStart] = React.useState(false); // came from the start screen's Send
   const autoDone = React.useRef(false);
   const editor = React.useRef(null);
@@ -308,14 +308,15 @@ function DraftingWorkspace({ project, file }) {
     const handoff = peekDraftHandoff(project, file);
     if (handoff) {
       setOptions({
-        type: handoff.type || '', tone: handoff.tone || DEFAULT_OPTIONS.tone,
-        length: handoff.length || DEFAULT_OPTIONS.length, prompt: handoff.prompt || '',
+        type: '', tone: handoff.tone || DEFAULT_OPTIONS.tone,
+        length: handoff.length || DEFAULT_OPTIONS.length, prompt: '',
       });
       setInstructions(handoff.text || '');
       setAutoStart(true);
     } else {
       const parsed = parseInstructions(draft?.instructions);
-      setOptions(parsed.options);
+      // Replies use tone and length only; a category saved by an older draft is dropped.
+      setOptions({ ...parsed.options, type: '', prompt: '' });
       setInstructions(parsed.text);
     }
     if (draft?.source_job_id) {
@@ -388,23 +389,7 @@ function DraftingWorkspace({ project, file }) {
     if (saved) setConfirmRegenerate(true); else generate();
   }, [autoStart, letter, replyTo, historyAsOf, canDraft, saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Same rules as the start screen: a task stays chosen while its [bracketed]
-  // details are edited, and switching keeps the user's own words.
-  const task = taskOf(options.type, options.prompt);
-  const editInstructions = (value) => {
-    setInstructions(value);
-    if (!value.trim() && options.prompt) setOptions((o) => ({ ...o, prompt: '' }));
-  };
-  const chooseType = (id) => {
-    if (id === options.type) return;
-    setInstructions((t) => switchTask(t, task, null));
-    setOptions((o) => ({ ...o, type: id, prompt: '' }));
-  };
-  const pickTask = (x) => {
-    const next = x.title === options.prompt ? null : x;
-    setInstructions((t) => switchTask(t, task, next));
-    setOptions((o) => ({ ...o, prompt: next ? next.title : '' }));
-  };
+  const editInstructions = (value) => setInstructions(value);
   const budget = textBudget(options);
   const used = charCount(instructions.trim());
   const overBudget = used > budget;
@@ -529,32 +514,23 @@ function DraftingWorkspace({ project, file }) {
                   <div className="cx-field cx-grow" style={{ minWidth: 240 }}>
                     <label htmlFor="dr-ins">Instructions for the AI</label>
                     <textarea id="dr-ins" className="cx-textarea" rows={2} value={instructions} onChange={(e) => editInstructions(e.target.value)}
-                      placeholder={options.type ? 'Pick a task below, then add your own words' : 'Optional, e.g. ask for the programme impact and do not accept any delay'} />
+                      placeholder="Optional, e.g. ask for the programme impact and do not accept any delay" />
                     <div className="cx-composer-foot">
-                      {/\[[A-Z][A-Z0-9 /&,.'-]*\]/.test(instructions) && <span className="cx-s11 cx-warn-text">Replace the [bracketed] details with this letter&apos;s facts.</span>}
                       <span className="cx-spacer" />
-                      <span className={`cx-count ${overBudget ? 'over' : ''}`} title="Your text, within the 4,000-character instructions limit (the letter type's guidance uses the rest)">{used} / {budget}</span>
+                      <span className={`cx-count ${overBudget ? 'over' : ''}`} title="Your text, within the 4,000-character instructions limit (the tone and length guidance uses the rest)">{used} / {budget}</span>
                     </div>
                   </div>
                 </div>
                 <div className="cx-composer-bar">
-                  <MenuSelect label="Letter type" heading="Letter category" value={options.type} menuWidth={300} disabled={!!busy}
-                    onChange={chooseType}
-                    options={LETTER_TYPES.map((x) => ({ id: x.id, label: x.label }))} />
                   <MenuSelect label="Tone" heading="Tone of letter" value={options.tone} options={TONES} disabled={!!busy}
                     onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} />
                   <MenuSelect label="Length" heading="Response length" value={options.length} options={LENGTHS} disabled={!!busy}
                     onChange={(id) => setOptions((o) => ({ ...o, length: id }))} />
                 </div>
                 <div className="cx-prompts">
-                  {letterTypeOf(options.type)
-                    ? letterTypeOf(options.type).prompts.map((x) => (
-                      <button key={x.title} type="button" className={`cx-prompt ${options.prompt === x.title ? 'on' : ''}`} disabled={!!busy} title={x.text}
-                        aria-pressed={options.prompt === x.title} onClick={() => pickTask(x)}>{x.title}</button>
-                    ))
-                    : QUICK_INSTRUCTIONS.map((x) => (
-                      <button key={x} type="button" className="cx-prompt" disabled={!!busy} onClick={() => editInstructions(x)}>{x}</button>
-                    ))}
+                  {QUICK_INSTRUCTIONS.map((x) => (
+                    <button key={x} type="button" className="cx-prompt" disabled={!!busy} onClick={() => editInstructions(x)}>{x}</button>
+                  ))}
                 </div>
                 <div className="cx-toolbar">
                   <span className="cx-s11 cx-muted">Generating takes about a minute. The draft is saved under {user}.</span>
