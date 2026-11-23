@@ -36,6 +36,8 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       port: parseInt(env.VITE_PORT) || 5000,
+      // Never move to another port: Microsoft sign-in only accepts registered redirect URIs.
+      strictPort: true,
       allowedHosts: ['erm-stag.systra.info'],
       proxy: {
         // Must stay above '/api': the first matching prefix wins.
@@ -107,6 +109,7 @@ export default defineConfig(({ mode }) => {
     preview: {
       host: true,
       port: parseInt(env.VITE_PORT) || 5000, // 👈 added for preview
+      strictPort: true,
     },
     build: {
       outDir: 'build',
