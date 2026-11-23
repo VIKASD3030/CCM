@@ -181,10 +181,13 @@ class Login extends React.Component {
 
   // Local testing without Microsoft sign-in (development builds only, when
   // VITE_DEV_LOGIN_EMAIL is set). Starts a session for that email; no backend call.
+  // The session token must be non-empty: checkSession() (used by PrivateRoute)
+  // treats an empty token as signed out and would show this page again. It is a
+  // placeholder only; the dev proxy adds the real CCM API token.
   localLogin = () => {
     const email = config.devLoginEmail;
     if (!email) return;
-    setSession(email, email, 'token' + email, '', true, email.split('@')[0]);
+    setSession(email, email, 'token' + email, 'local-dev-session', true, email.split('@')[0]);
     this.setState({ isExternalLogin: true });
   }
 

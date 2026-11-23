@@ -19,6 +19,8 @@ import {
   DEFAULT_OPTIONS, LENGTHS, TONES, charCount, setDraftHandoff, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
+import PageLimitSelect from '../ui/page-limit-select';
+import SavedPromptsMenu from '../ui/saved-prompts-menu';
 import { Dropzone } from '../ui/modals';
 import {
   PageTop, Btn, Chip, Empty, Skeleton, Modal, go, ROUTES, toast, useQueryParam, fmtDate,
@@ -200,6 +202,8 @@ export default function DraftingStart() {
             </span>
             <MenuSelect label="Tone" heading="Tone of letter" value={options.tone} onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} options={TONES} />
             <MenuSelect label="Length" heading="Response length" value={options.length} onChange={(id) => setOptions((o) => ({ ...o, length: id }))} options={LENGTHS} />
+            <PageLimitSelect value={options.pages} onChange={(id) => setOptions((o) => ({ ...o, pages: id }))} />
+            <SavedPromptsMenu text={text} onInsert={(p) => { setText((t) => (t.trim() ? `${t.trimEnd()}\n\n${p}` : p)); box.current?.focus(); }} />
             <span className="cx-spacer" />
             <button type="button" className="cx-send" onClick={send} disabled={!!missing} title={missing || 'Draft the reply (Ctrl+Enter)'} aria-label="Draft the reply">
               <img src={sendIcon} alt="" />

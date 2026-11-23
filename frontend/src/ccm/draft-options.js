@@ -18,6 +18,7 @@
  * The same text is saved with the draft; parseInstructions() reads it back.
  */
 import { LETTER_CATEGORIES } from './draft-categories';
+import { DEFAULT_PAGE_LIMIT } from './page-limit';
 
 /** Letter types are the prompt library's categories; `prompts` are its tasks. */
 export const LETTER_TYPES = LETTER_CATEGORIES.map((c) => ({
@@ -37,7 +38,8 @@ export const LENGTHS = [
   { id: 'detailed', label: 'Detailed', hint: '~350+ words', guidance: 'Write a detailed reply of 350 words or more.' },
 ];
 
-export const DEFAULT_OPTIONS = { type: '', tone: 'formal', length: 'standard', prompt: '' };
+// `pages` (page-limit.js) is not part of the instructions; it travels as its own request field once the API has one.
+export const DEFAULT_OPTIONS = { type: '', tone: 'formal', length: 'standard', prompt: '', pages: DEFAULT_PAGE_LIMIT };
 
 export const letterTypeOf = (id) => LETTER_TYPES.find((t) => t.id === id) || null;
 export const toneOf = (id) => TONES.find((t) => t.id === id) || TONES[0];

@@ -22,6 +22,9 @@ import {
   parseInstructions, peekDraftHandoff, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
+import PageLimitSelect from '../ui/page-limit-select';
+import { DEFAULT_PAGE_LIMIT, pageLimitRequest } from '../page-limit';
+import SavedPromptsMenu from '../ui/saved-prompts-menu';
 import DraftingStart from './drafting-start';
 import DraftingChoice from './drafting-choice';
 import NewLetter from './new-letter';
@@ -310,6 +313,7 @@ function DraftingWorkspace({ project, file }) {
       setOptions({
         type: '', tone: handoff.tone || DEFAULT_OPTIONS.tone,
         length: handoff.length || DEFAULT_OPTIONS.length, prompt: '',
+        pages: handoff.pages || DEFAULT_PAGE_LIMIT,
       });
       setInstructions(handoff.text || '');
       setAutoStart(true);
@@ -357,6 +361,7 @@ function DraftingWorkspace({ project, file }) {
         reply_to_party: replyTo,
         history_as_of: historyAsOf,
         instructions: composed,
+        ...pageLimitRequest(options.pages), // {} until the API has a page-limit field (see page-limit.js)
       });
       const receipt = unwrap(receiptResponse);
       const draftResult = jobResult(await waitForJob(receipt, { timeoutMs: 15 * 60 * 1000, intervalMs: 2000 }));
@@ -526,6 +531,9 @@ function DraftingWorkspace({ project, file }) {
                     onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} />
                   <MenuSelect label="Length" heading="Response length" value={options.length} options={LENGTHS} disabled={!!busy}
                     onChange={(id) => setOptions((o) => ({ ...o, length: id }))} />
+                  <PageLimitSelect value={options.pages} disabled={!!busy}
+                    onChange={(id) => setOptions((o) => ({ ...o, pages: id }))} />
+                  <SavedPromptsMenu text={instructions} disabled={!!busy} onInsert={(p) => setInstructions((t) => (t.trim() ? `${t.trimEnd()}\n\n${p}` : p))} />
                 </div>
                 <div className="cx-prompts">
                   {QUICK_INSTRUCTIONS.map((x) => (
