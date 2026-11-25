@@ -11,7 +11,7 @@
 import React from 'react';
 
 export default function MenuSelect({
-  label, heading, value, options, onChange, placeholder = 'Select', allLabel, variant, disabled, menuWidth = 260, align = 'left', note,
+  label, heading, value, options, onChange, placeholder = 'Select', allLabel, variant, disabled, menuWidth = 260, align = 'left',
 }) {
   const [open, setOpen] = React.useState(false);
   const root = React.useRef(null);
@@ -40,7 +40,6 @@ export default function MenuSelect({
       {open && (
         <div className={`cx-ms-menu ${align}`} role="listbox" aria-label={heading || label} style={{ width: menuWidth }}>
           {heading && <div className="cx-ms-head">{heading}</div>}
-          {note && <div className="cx-ms-note">{note}</div>}
           {items.length === 0 && <div className="cx-ms-empty">Nothing to choose yet</div>}
           {items.map((o) => (
             <button key={o.id || '_all'} type="button" role="option" aria-selected={o.id === value}

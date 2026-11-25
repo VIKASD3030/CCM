@@ -19,7 +19,6 @@ import {
   DEFAULT_OPTIONS, LENGTHS, TONES, charCount, setDraftHandoff, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
-import PageLimitSelect from '../ui/page-limit-select';
 import SavedPromptsMenu from '../ui/saved-prompts-menu';
 import { Dropzone } from '../ui/modals';
 import {
@@ -188,7 +187,7 @@ export default function DraftingStart() {
 
         <div className="cx-composer">
           <textarea ref={box} rows={2} value={text} onChange={(e) => editText(e.target.value)}
-            placeholder="Describe the reply you need (optional)…"
+            placeholder="Describe the reply you need (optional) & mention the pages to analyze"
             aria-label="Describe the reply you need"
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
           <div className="cx-composer-bar">
@@ -202,7 +201,6 @@ export default function DraftingStart() {
             </span>
             <MenuSelect label="Tone" heading="Tone of letter" value={options.tone} onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} options={TONES} />
             <MenuSelect label="Length" heading="Response length" value={options.length} onChange={(id) => setOptions((o) => ({ ...o, length: id }))} options={LENGTHS} />
-            <PageLimitSelect value={options.pages} onChange={(id) => setOptions((o) => ({ ...o, pages: id }))} />
             <SavedPromptsMenu text={text} onInsert={(p) => { setText((t) => (t.trim() ? `${t.trimEnd()}\n\n${p}` : p)); box.current?.focus(); }} />
             <span className="cx-spacer" />
             <button type="button" className="cx-send" onClick={send} disabled={!!missing} title={missing || 'Draft the reply (Ctrl+Enter)'} aria-label="Draft the reply">
