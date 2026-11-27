@@ -19,10 +19,11 @@ import {
 } from '../session';
 import {
   DEFAULT_OPTIONS, LENGTHS, TONES, charCount, clearDraftHandoff, composeInstructions,
-  parseInstructions, peekDraftHandoff, textBudget,
+  pagesError, parseInstructions, peekDraftHandoff, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
 import SavedPromptsMenu from '../ui/saved-prompts-menu';
+import PagesInput from '../ui/pages-input';
 import DraftingStart from './drafting-start';
 import DraftingChoice from './drafting-choice';
 import NewLetter from './new-letter';
@@ -311,6 +312,7 @@ function DraftingWorkspace({ project, file }) {
       setOptions({
         type: '', tone: handoff.tone || DEFAULT_OPTIONS.tone,
         length: handoff.length || DEFAULT_OPTIONS.length, prompt: '',
+        pages: handoff.pages || '',
       });
       setInstructions(handoff.text || '');
       setAutoStart(true);
@@ -386,6 +388,7 @@ function DraftingWorkspace({ project, file }) {
     autoDone.current = true;
     setAutoStart(false);
     clearDraftHandoff();
+    if (pagesError(options.pages)) { toast(`Pages: ${pagesError(options.pages)}`, 'error'); return; }
     if (!canDraft) { toast('This letter can\'t be drafted yet. Check the project setup and the letter text.', 'error'); return; }
     if (saved) setConfirmRegenerate(true); else generate();
   }, [autoStart, letter, replyTo, historyAsOf, canDraft, saved]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -394,6 +397,7 @@ function DraftingWorkspace({ project, file }) {
   const budget = textBudget(options);
   const used = charCount(instructions.trim());
   const overBudget = used > budget;
+  const pagesProblem = pagesError(options.pages);
 
   const save = async () => {
     setBusy('save');
@@ -515,7 +519,7 @@ function DraftingWorkspace({ project, file }) {
                   <div className="cx-field cx-grow" style={{ minWidth: 240 }}>
                     <label htmlFor="dr-ins">Instructions for the AI</label>
                     <textarea id="dr-ins" className="cx-textarea" rows={2} value={instructions} onChange={(e) => editInstructions(e.target.value)}
-                      placeholder="Optional, e.g. analyse only the first 5 pages (up to 500), ask for the programme impact and do not accept any delay" />
+                      placeholder="Optional, e.g. ask for the programme impact and do not accept any delay" />
                     <div className="cx-composer-foot">
                       <span className="cx-spacer" />
                       <span className={`cx-count ${overBudget ? 'over' : ''}`} title="Your text, within the 4,000-character instructions limit (the tone and length guidance uses the rest)">{used} / {budget}</span>
@@ -527,6 +531,7 @@ function DraftingWorkspace({ project, file }) {
                     onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} />
                   <MenuSelect label="Length" heading="Response length" value={options.length} options={LENGTHS} disabled={!!busy}
                     onChange={(id) => setOptions((o) => ({ ...o, length: id }))} />
+                  <PagesInput value={options.pages} disabled={!!busy} onChange={(v) => setOptions((o) => ({ ...o, pages: v }))} />
                   <SavedPromptsMenu text={instructions} disabled={!!busy} onInsert={(p) => setInstructions((t) => (t.trim() ? `${t.trimEnd()}\n\n${p}` : p))} />
                 </div>
                 <div className="cx-prompts">
@@ -538,7 +543,8 @@ function DraftingWorkspace({ project, file }) {
                   <span className="cx-s11 cx-muted">Generating takes about a minute. The draft is saved under {user}.</span>
                   <span className="cx-spacer" />
                   {overBudget && <span className="cx-s11" style={{ color: 'var(--cx-red)' }}>Shorten the instructions by {used - budget} characters.</span>}
-                  <Btn variant="primary" disabled={!canDraft || !replyTo || !historyAsOf || !!busy || overBudget}
+                  {pagesProblem && <span className="cx-s11 cx-bad-text">Pages: {pagesProblem}</span>}
+                  <Btn variant="primary" disabled={!canDraft || !replyTo || !historyAsOf || !!busy || overBudget || !!pagesProblem}
                     onClick={() => (saved ? setConfirmRegenerate(true) : generate())}>
                     {busy === 'generate' ? 'Drafting…' : saved ? 'Regenerate' : 'Generate draft'}
                   </Btn>

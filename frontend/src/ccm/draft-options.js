@@ -11,6 +11,7 @@
  *
  *   Tone: <tone guidance>
  *   Length: <length guidance>
+ *   Pages: analyse only pages <range> of the incoming letter.   (only when set)
  *
  *   Task — <task name>:                       ("Instructions:" when no task)
  *   <the user's text: the task, edited, plus their own words>
@@ -37,7 +38,38 @@ export const LENGTHS = [
   { id: 'detailed', label: 'Detailed', hint: '~350+ words', guidance: 'Write a detailed reply of 350 words or more.' },
 ];
 
-export const DEFAULT_OPTIONS = { type: '', tone: 'formal', length: 'standard', prompt: '' };
+// `pages`: which pages of the incoming letter the AI should analyse ('' = all).
+export const DEFAULT_OPTIONS = { type: '', tone: 'formal', length: 'standard', prompt: '', pages: '' };
+
+/* ─── Pages to analyse ──────────────────────────────────────────────────── */
+
+export const MAX_PAGE = 500;
+const PAGES_RE = /^\d+(?:\s*-\s*\d+)?(?:\s*,\s*\d+(?:\s*-\s*\d+)?)*$/;
+
+/** "1 - 3 ,8" → "1-3, 8" */
+export const normalizePages = (value) => String(value || '').trim().replace(/\s*-\s*/g, '-').replace(/\s*,\s*/g, ', ');
+
+/** The pages as the import API expects them ("1-3,8"), or undefined when empty or invalid. */
+export const importPages = (value) => (String(value || '').trim() && !pagesError(value) ? normalizePages(value).replace(/\s/g, '') : undefined);
+
+/** Why a pages value is not valid, or '' when it is valid (or empty). */
+export function pagesError(value) {
+  const v = String(value || '').trim();
+  if (!v) return '';
+  if (!PAGES_RE.test(v)) return 'Use page numbers or ranges, e.g. 3, 1-5 or 1-3, 8.';
+  for (const part of v.split(',')) {
+    const [a, b = a] = part.split('-').map((n) => Number(n.trim()));
+    if (a < 1) return 'Pages start at 1.';
+    if (a > b) return `Ranges must go up, e.g. ${b}-${a}.`;
+    if (b > MAX_PAGE) return `The AI can analyse up to page ${MAX_PAGE}.`;
+  }
+  return '';
+}
+
+const pagesLine = (pages) => {
+  const p = normalizePages(pages);
+  return p ? `\nPages: analyse only ${/^\d+$/.test(p) ? 'page' : 'pages'} ${p} of the incoming letter.` : '';
+};
 
 export const letterTypeOf = (id) => LETTER_TYPES.find((t) => t.id === id) || null;
 export const toneOf = (id) => TONES.find((t) => t.id === id) || TONES[0];
@@ -53,11 +85,11 @@ export const charCount = (s) => [...String(s || '')].length;
 const taskHeading = (title) => (title ? `Task — ${title}:` : 'Instructions:');
 
 /** Everything sent except the user's text, ending where that text starts. */
-function frame({ type, tone, length, prompt }) {
+function frame({ type, tone, length, prompt, pages }) {
   const t = letterTypeOf(type);
   const parts = [];
   if (t) parts.push(t.systemPrompt);
-  parts.push(`Tone: ${toneOf(tone).guidance}\nLength: ${lengthOf(length).guidance}`);
+  parts.push(`Tone: ${toneOf(tone).guidance}\nLength: ${lengthOf(length).guidance}${pagesLine(pages)}`);
   return { head: parts.join('\n\n'), heading: taskHeading(t && prompt ? prompt : '') };
 }
 
@@ -98,7 +130,7 @@ export function parseInstructions(instructions) {
   let rest = raw;
   const t = LETTER_TYPES.find((x) => rest.startsWith(`${x.systemPrompt}\n\n`) || rest === x.systemPrompt);
   if (t) { options.type = t.id; rest = rest.slice(t.systemPrompt.length).replace(/^\n\n/, ''); }
-  const m = /^Tone: ([^\n]*)\nLength: ([^\n]*)(?:\n\n(?:Task — (.*):|Instructions:)\n([\s\S]*))?$/.exec(rest);
+  const m = /^Tone: ([^\n]*)\nLength: ([^\n]*)(?:\nPages: analyse only pages? (.+) of the incoming letter\.)?(?:\n\n(?:Task — (.*):|Instructions:)\n([\s\S]*))?$/.exec(rest);
   if (!m) {
     // Drafts saved before the prompt library: "[Letter type: … | Tone: … | …]\n<guidance>\n\n<text>"
     const old = /^\[([^\]\n]*)\]\n[^\n]*(?:\n\n([\s\S]*))?$/.exec(raw);
@@ -110,8 +142,9 @@ export function parseInstructions(instructions) {
   }
   options.tone = TONES.find((x) => x.guidance === m[1])?.id || options.tone;
   options.length = LENGTHS.find((x) => x.guidance === m[2])?.id || options.length;
-  if (m[3] && taskOf(options.type, m[3])) options.prompt = m[3];
-  return { options, text: m[4] || '' };
+  if (m[3]) options.pages = m[3];
+  if (m[4] && taskOf(options.type, m[4])) options.prompt = m[4];
+  return { options, text: m[5] || '' };
 }
 
 /* ─── Hand-off from the start screen to the drafting workspace ──────────── */

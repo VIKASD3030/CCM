@@ -2,7 +2,8 @@
  * AI Drafting start screen (prototype frames "06a · Start"): the first screen
  * after sign-in and whenever no letter is open.
  *   - Project picker in the header
- *   - Composer: the user's words, attach the letter to reply to, tone, length
+ *   - Composer: the user's words, attach the letter to reply to, tone, length,
+ *     pages to analyse (also the pages read when a PDF is uploaded here)
  * Tone, length and the user's words go into the draft request's `instructions`,
  * kept within the API's 4,000 characters (see draft-options.js). Send hands the
  * choices to the drafting workspace, which generates the reply.
@@ -16,10 +17,11 @@ import { ccmApi } from '../ccm-public-api';
 import { errorText, readinessText, runJob } from '../project-setup';
 import { currentUser, rememberProject, replyState, useProjects } from '../session';
 import {
-  DEFAULT_OPTIONS, LENGTHS, TONES, charCount, setDraftHandoff, textBudget,
+  DEFAULT_OPTIONS, LENGTHS, TONES, charCount, importPages, pagesError, setDraftHandoff, textBudget,
 } from '../draft-options';
 import MenuSelect from '../ui/menu-select';
 import SavedPromptsMenu from '../ui/saved-prompts-menu';
+import PagesInput from '../ui/pages-input';
 import { Dropzone } from '../ui/modals';
 import {
   PageTop, Btn, Chip, Empty, Skeleton, Modal, go, ROUTES, toast, useQueryParam, fmtDate,
@@ -31,7 +33,7 @@ const INCOMING_RE = /^(incoming|inbound|received|in)([-_].*)?$/i;
 
 /* ─── Attach the letter being replied to ─────────────────────────────────── */
 
-function AttachLetterModal({ project, onPick, onClose }) {
+function AttachLetterModal({ project, pages, onPick, onClose }) {
   const user = currentUser();
   const [q, setQ] = React.useState('');
   const [letters, setLetters] = React.useState(null);
@@ -57,7 +59,7 @@ function AttachLetterModal({ project, onPick, onClose }) {
       if (!opts.ok) throw new Error(errorText(opts));
       const folder = (opts.data.folders.find((f) => INCOMING_RE.test(f.key)) || opts.data.folders[0])?.key;
       if (!folder) throw new Error('This project has no import folder. Check its configuration.');
-      const result = await runJob(await ccmApi.imports.upload(project, { folder, files: [file] }));
+      const result = await runJob(await ccmApi.imports.upload(project, { folder, pages: importPages(pages), files: [file] }));
       const row = result.rows?.[0];
       if (!row || row.state === 'failed') throw new Error(row?.detail || 'The letter could not be imported.');
       const l = await ccmApi.letters.get(project, row.stem);
@@ -101,7 +103,9 @@ function AttachLetterModal({ project, onPick, onClose }) {
         <div className="cx-drop"><b>Importing the letter…</b><span className="cx-s12 cx-muted">Reading the PDF can take a little while.</span></div>
       ) : (
         <Dropzone onFiles={upload} multiple={false} title="Or upload the letter (PDF)"
-          hint="It is imported into this project's incoming letters, then attached." />
+          hint={importPages(pages)
+            ? `Pages ${importPages(pages)} are read and imported into this project's incoming letters, then attached.`
+            : "It is imported into this project's incoming letters, then attached."} />
       )}
     </Modal>
   );
@@ -149,8 +153,10 @@ export default function DraftingStart() {
   const budget = textBudget(options);
   const used = charCount(text.trim());
   const over = used > budget;
+  const pagesProblem = pagesError(options.pages);
   const missing = !project ? 'Select a project first.' : !letter ? 'Attach the letter you are replying to.'
     : info && !ready ? 'This project is not ready for drafting.'
+      : pagesProblem ? `Pages: ${pagesProblem}`
       : over ? `Shorten your text by ${used - budget} characters (the instructions limit is 4,000).` : '';
 
   const send = () => {
@@ -187,7 +193,7 @@ export default function DraftingStart() {
 
         <div className="cx-composer">
           <textarea ref={box} rows={2} value={text} onChange={(e) => editText(e.target.value)}
-            placeholder="Describe the reply you need (optional) & mention the pages to analyze"
+            placeholder="Describe the reply you need (optional)…"
             aria-label="Describe the reply you need"
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
           <div className="cx-composer-bar">
@@ -201,6 +207,7 @@ export default function DraftingStart() {
             </span>
             <MenuSelect label="Tone" heading="Tone of letter" value={options.tone} onChange={(id) => setOptions((o) => ({ ...o, tone: id }))} options={TONES} />
             <MenuSelect label="Length" heading="Response length" value={options.length} onChange={(id) => setOptions((o) => ({ ...o, length: id }))} options={LENGTHS} />
+            <PagesInput value={options.pages} onChange={(v) => setOptions((o) => ({ ...o, pages: v }))} />
             <SavedPromptsMenu text={text} onInsert={(p) => { setText((t) => (t.trim() ? `${t.trimEnd()}\n\n${p}` : p)); box.current?.focus(); }} />
             <span className="cx-spacer" />
             <button type="button" className="cx-send" onClick={send} disabled={!!missing} title={missing || 'Draft the reply (Ctrl+Enter)'} aria-label="Draft the reply">
@@ -212,6 +219,7 @@ export default function DraftingStart() {
               {letter?.subject ? <>Replying to: {letter.subject}{letter.sender ? ` · from ${letter.sender}` : ''}</> : null}
             </span>
             <span className="cx-spacer" />
+            {pagesProblem && <span className="cx-s11 cx-bad-text">Pages: {pagesProblem}</span>}
             <span className={`cx-count ${over ? 'over' : ''}`} title="Your text, within the 4,000-character instructions limit (the tone and length guidance uses the rest)">
               {used} / {budget}
             </span>
@@ -221,7 +229,7 @@ export default function DraftingStart() {
       </div>
 
       {attaching && (
-        <AttachLetterModal project={project} onClose={() => setAttaching(false)}
+        <AttachLetterModal project={project} pages={options.pages} onClose={() => setAttaching(false)}
           onPick={(l) => { setLetter(l); setAttaching(false); }} />
       )}
     </>
